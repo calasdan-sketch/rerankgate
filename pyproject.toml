@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rerankgate"
+version = "0.2.0"
+description = "Agentic RAG quality gate: hybrid retrieval with a sufficiency gate, query-rewrite retries, and per-stage metrics. Local-first."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Calas Automations Inc." }]
+keywords = ["rag", "retrieval", "rerank", "bm25", "quality-gate", "agentic"]
+requires-python = ">=3.10"
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[project.optional-dependencies]
+local = ["numpy>=1.24", "sentence-transformers>=2.2"]
+dev = ["pytest>=7", "ruff>=0.1"]
+
+[project.scripts]
+rerankgate = "rerankgate.cli:main"
+
+[project.urls]
+Homepage = "https://calasautomations.com"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,2 @@
+[console_scripts]
+rerankgate = rerankgate.cli:main
