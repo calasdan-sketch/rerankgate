@@ -11,6 +11,7 @@ from rerankgate.documents import Document, chunk_text
 from rerankgate.gate import GateDecision, SufficiencyGate
 from rerankgate.pipeline import AnswerResult, RAGPipeline, Verdict
 from rerankgate.retrieval import HybridRetriever, ScoredChunk
+from rerankgate.store import StoreError
 
 __all__ = [
     "AnswerResult",
@@ -22,9 +23,10 @@ __all__ = [
     "RAGPipeline",
     "RetryConfig",
     "ScoredChunk",
+    "StoreError",
     "SufficiencyGate",
     "Verdict",
     "chunk_text",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

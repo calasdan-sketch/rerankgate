@@ -1,10 +1,32 @@
-"""Shared tokenization and stopwords."""
+"""Shared tokenization and stopwords.
+
+Unicode-aware: text is NFKC-normalized and case-folded, so "Café", "CAFÉ" and
+"café" are one token, and full-width digits/letters match their ASCII forms.
+Chinese/Japanese ideographs, kana and Hangul syllables are split into single
+characters (Thai and other unspaced scripts are not handled), which gives BM25 something to match
+on instead of one giant "word" per sentence. This is a pragmatic baseline, not a
+linguistic segmenter.
+"""
 
 from __future__ import annotations
 
 import re
+import unicodedata
 
-_TOKEN = re.compile(r"[a-z0-9]+")
+# Letters/digits in any script (no underscore).
+_TOKEN = re.compile(r"[^\W_]+")
+
+# CJK ideographs, kana, and Hangul syllables: tokenized one character at a time.
+_CJK = re.compile(
+    "["
+    "぀-ゟ"  # Hiragana
+    "゠-ヿ"  # Katakana
+    "㐀-䶿"  # CJK Extension A
+    "一-鿿"  # CJK Unified Ideographs
+    "가-힯"  # Hangul syllables
+    "豈-﫿"  # CJK Compatibility Ideographs
+    "]"
+)
 
 STOPWORDS = frozenset(
     """
@@ -19,9 +41,30 @@ STOPWORDS = frozenset(
 )
 
 
+def _normalize(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
 def tokenize(text: str) -> list[str]:
-    """Lowercase alphanumeric tokens."""
-    return _TOKEN.findall(text.lower())
+    """Case-folded word tokens in any script; CJK split per character."""
+    out: list[str] = []
+    for tok in _TOKEN.findall(_normalize(text)):
+        if _CJK.search(tok):
+            # Split CJK runs into characters, keep embedded non-CJK runs whole.
+            buf = ""
+            for ch in tok:
+                if _CJK.match(ch):
+                    if buf:
+                        out.append(buf)
+                        buf = ""
+                    out.append(ch)
+                else:
+                    buf += ch
+            if buf:
+                out.append(buf)
+        else:
+            out.append(tok)
+    return out
 
 
 def content_tokens(text: str) -> list[str]:

@@ -106,6 +106,7 @@ class RAGPipeline:
         self.embeddings: EmbeddingBackend | None = None
         self.vector_store: VectorStore | None = None
         self.degraded_reason: str | None = None
+        self.reembedded_on_load = False
         if self.config.use_vectors:
             if embeddings is not None:
                 self._enable_vectors(embeddings)
@@ -127,6 +128,18 @@ class RAGPipeline:
     # -- ingestion -----------------------------------------------------
     def ingest(self, documents: list[Document]) -> int:
         """Chunk, index, and embed documents. Returns chunk count added."""
+        seen = {c.doc_id for c in self.chunks}
+        batch: set[str] = set()
+        for doc in documents:
+            if not isinstance(doc.id, str) or not doc.id:
+                raise ValueError(f"document id must be a non-empty string, got {doc.id!r}")
+            if "#c" in doc.id:
+                raise ValueError(f"document id {doc.id!r} must not contain '#c' (chunk-id marker)")
+            if doc.id in seen or doc.id in batch:
+                # Duplicate ids would produce colliding chunk ids and silently
+                # merge two documents' scores during fusion.
+                raise ValueError(f"duplicate document id {doc.id!r}")
+            batch.add(doc.id)
         new_chunks: list[Chunk] = []
         for doc in documents:
             new_chunks.extend(
@@ -166,21 +179,29 @@ class RAGPipeline:
         store = DocumentStore(path)
         chunks, vectors, meta = store.load()
         pipe = cls(config=config, embeddings=embeddings)
-        # If the store has vectors but this process has no embedding backend
-        # (e.g. sentence-transformers missing), stay BM25-only: retrieval
-        # still works, quality just degrades gracefully.
-        if vectors and pipe.vector_store is not None and pipe.embeddings is not None:
-            if len(vectors) == len(chunks) and len(vectors[0]) == pipe.embeddings.dim:
-                pipe.vector_store.add(chunks, vectors)
-            # else: dim mismatch (different model) -> fall back to re-embed
-            # lazily on next ingest; existing vectors are not trusted.
         pipe.chunks = chunks
         pipe.bm25.add(chunks)
-        if vectors and (pipe.vector_store is None or len(pipe.vector_store) == 0):
-            # Re-embed with the current backend if dims allow.
-            if pipe.embeddings is not None:
-                pipe.vector_store = VectorStore(dim=pipe.embeddings.dim)
-                pipe.vector_store.add(chunks, pipe.embeddings.embed([c.text for c in chunks]))
+        if pipe.embeddings is None or pipe.vector_store is None:
+            # No embedding backend in this process (e.g. sentence-transformers
+            # missing): stay BM25-only. Retrieval still works; quality degrades
+            # gracefully and the trace says so.
+            return pipe
+        stored_model = meta.get("embedding")
+        same_model = stored_model is None or stored_model == pipe.embeddings.name
+        if (
+            vectors
+            and same_model
+            and len(vectors) == len(chunks)
+            and len(vectors[0]) == pipe.embeddings.dim
+        ):
+            pipe.vector_store.add(chunks, vectors)
+        elif chunks:
+            # Different model (even with the same dimension), missing, or
+            # unreadable vectors: re-embed. Vectors from another model are
+            # never mixed with this model's query embeddings.
+            pipe.vector_store = VectorStore(dim=pipe.embeddings.dim)
+            pipe.vector_store.add(chunks, pipe.embeddings.embed([c.text for c in chunks]))
+            pipe.reembedded_on_load = True
         return pipe
 
     # -- querying ------------------------------------------------------
@@ -299,3 +320,75 @@ class RAGPipeline:
                 }
             )
         return aggregate(items, results).to_dict()
+
+    def calibrate(
+        self,
+        items: list[EvalItem],
+        thresholds: list[float] | None = None,
+        target_precision: float | None = None,
+    ) -> dict:
+        """Sweep gate thresholds on labeled data and recommend one.
+
+        Each threshold is a full re-run of `ask()` (retries depend on the
+        threshold, so scores can't just be re-cut). Recommendation:
+
+        - with `target_precision`: the threshold with the highest gate recall
+          whose gate precision is >= the target (ties -> stricter threshold);
+          `None` if no threshold reaches the target.
+        - otherwise: the threshold with the best F1 of gate precision/recall
+          (ties -> stricter threshold).
+
+        Requires at least one answerable and one unanswerable item: without
+        both, precision/recall trade-offs are undefined and this fails closed.
+        """
+        import dataclasses
+
+        if not items:
+            raise ValueError("calibrate() needs at least one labeled item")
+        if not any(it.answerable for it in items) or all(it.answerable for it in items):
+            raise ValueError(
+                "calibrate() needs both answerable and unanswerable items to measure "
+                "the precision/recall trade-off"
+            )
+        if target_precision is not None and not 0.0 < target_precision <= 1.0:
+            raise ValueError("target_precision must be in (0, 1]")
+        if thresholds is None:
+            thresholds = [round(0.30 + 0.05 * i, 2) for i in range(11)]  # 0.30 .. 0.80
+        if not thresholds or any(not 0.0 < t <= 1.0 for t in thresholds):
+            raise ValueError("thresholds must be a non-empty list of values in (0, 1]")
+
+        original = self.gate
+        base = self.config.effective_gate()
+        rows: list[dict] = []
+        try:
+            for t in sorted(set(thresholds)):
+                self.gate = SufficiencyGate(dataclasses.replace(base, threshold=t))
+                rep = self.evaluate(items)
+                p, r = rep["gate_precision"], rep["gate_recall"]
+                f1 = 2 * p * r / (p + r) if (p + r) else 0.0
+                rows.append(
+                    {
+                        "threshold": t,
+                        "gate_precision": p,
+                        "gate_recall": r,
+                        "f1": round(f1, 4),
+                        "abstention_rate": rep["abstention_rate"],
+                    }
+                )
+        finally:
+            self.gate = original
+
+        if target_precision is not None:
+            ok = [row for row in rows if row["gate_precision"] >= target_precision]
+            best = max(ok, key=lambda row: (row["gate_recall"], row["threshold"])) if ok else None
+            rule = f"max recall with precision >= {target_precision}"
+        else:
+            best = max(rows, key=lambda row: (row["f1"], row["threshold"]))
+            rule = "max F1"
+        return {
+            "n": len(items),
+            "rule": rule,
+            "current_threshold": base.threshold,
+            "recommended_threshold": best["threshold"] if best else None,
+            "sweep": rows,
+        }

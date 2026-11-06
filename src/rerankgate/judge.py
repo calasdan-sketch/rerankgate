@@ -17,7 +17,7 @@ _SENT = re.compile(r"(?<=[.!?])\s+")
 class FaithfulnessReport:
     score: float  # mean per-sentence grounding, [0,1]
     unsupported: list[str] = field(default_factory=list)  # sentences below the floor
-    per_sentence: list[dict] = field(default_factory=dict)
+    per_sentence: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -34,11 +34,15 @@ class Judge(Protocol):
 
 
 class HeuristicJudge:
-    """Ground every answer sentence in the evidence via token-overlap F1.
+    """Ground every answer sentence in the evidence via token precision.
 
-    A sentence is 'supported' if some evidence chunk shares enough content
-    tokens (F1 >= 0.35 by default). Heuristic — documented as such — but
-    free, instant, and dependency-free.
+    A sentence's grounding is the largest fraction of its content tokens that
+    appear in any single evidence chunk. A sentence is 'supported' when that
+    fraction reaches the floor (0.35 by default). Heuristic — documented as
+    such — but free, instant, and dependency-free.
+
+    (rerankgate <= 0.2 used token F1 against the whole chunk, which punished
+    short, correct sentences quoted from long chunks.)
     """
 
     name = "heuristic"
@@ -57,11 +61,7 @@ class HeuristicJudge:
             for ev in ev_sets:
                 if not s_toks or not ev:
                     continue
-                inter = s_toks & ev
-                prec = len(inter) / len(s_toks)
-                rec = len(inter) / len(ev)
-                f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
-                best = max(best, f1)
+                best = max(best, len(s_toks & ev) / len(s_toks))
             per_sentence.append({"sentence": s, "grounding": round(best, 4)})
             if best < self.support_floor:
                 unsupported.append(s)
@@ -83,6 +83,13 @@ class LLMJudge:
         self._fn = fn
 
     def check(self, answer: str, evidence: list[ScoredChunk]) -> FaithfulnessReport:
-        score = float(self._fn(answer, [c.chunk.text for c in evidence]))
+        import math
+
+        try:
+            score = float(self._fn(answer, [c.chunk.text for c in evidence]))
+        except (TypeError, ValueError):
+            score = 0.0  # unparseable judge output fails closed
+        if not math.isfinite(score):
+            score = 0.0  # NaN/inf must never count as "faithful"
         score = max(0.0, min(1.0, score))
         return FaithfulnessReport(score=round(score, 4))

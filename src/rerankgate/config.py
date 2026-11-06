@@ -36,6 +36,29 @@ class GateConfig:
     # Minimum normalized top-1 rerank score before the gate can pass.
     min_top_score: float = 0.10
 
+    def validate(self) -> None:
+        """Fail closed on settings that would make the gate meaningless."""
+        import math
+
+        values = {
+            "threshold": self.threshold,
+            "w_top_score": self.w_top_score,
+            "w_coverage": self.w_coverage,
+            "w_margin": self.w_margin,
+            "w_support": self.w_support,
+            "min_coverage": self.min_coverage,
+            "min_top_score": self.min_top_score,
+        }
+        for name, v in values.items():
+            if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+                raise ValueError(f"GateConfig.{name} must be a finite number, got {v!r}")
+            if v < 0:
+                raise ValueError(f"GateConfig.{name} must be >= 0, got {v!r}")
+        if self.threshold <= 0:
+            raise ValueError("GateConfig.threshold must be > 0 (0 would pass everything)")
+        if self.w_top_score + self.w_coverage + self.w_margin + self.w_support <= 0:
+            raise ValueError("GateConfig weights sum to 0: the gate could never score anything")
+
     def preset(self, name: str) -> GateConfig:
         """Return a copy with a named strictness preset applied."""
         presets = {
@@ -71,7 +94,17 @@ class PipelineConfig:
     # Gate + retry
     gate: GateConfig = field(default_factory=GateConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
-    gate_preset: str = "balanced"
+    # None = use `gate` exactly as given (its defaults equal "balanced").
+    # A preset name overrides gate.threshold and gate.min_coverage.
+    gate_preset: str | None = None
 
     def effective_gate(self) -> GateConfig:
-        return self.gate.preset(self.gate_preset)
+        import dataclasses
+
+        gate = (
+            self.gate.preset(self.gate_preset)
+            if self.gate_preset
+            else dataclasses.replace(self.gate)
+        )
+        gate.validate()
+        return gate
