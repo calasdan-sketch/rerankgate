@@ -5,6 +5,15 @@
 The corpus is random words drawn from a Zipf-like vocabulary, so numbers show
 relative scaling on *your* machine, not quality. Compares the inverted-index
 search against a full-scan scorer (the algorithm used in rerankgate <= 0.2).
+
+The speedup depends heavily on the query mix: the inverted index only skips
+chunks that contain none of the query's terms. Three query sets are timed:
+
+- rare:     4 terms from ranks 50-5000 (specific keyword queries)
+- mixed:    2 very frequent terms (ranks 0-50, standing in for words like
+            "what", "is", "the" — BM25 keeps stopwords) + 2 rarer terms;
+            closest to a natural-language question
+- frequent: 4 terms from ranks 0-50 (worst case)
 """
 
 from __future__ import annotations
@@ -48,19 +57,27 @@ def main() -> None:
     t = time.perf_counter()
     idx.add(chunks)
     build = time.perf_counter() - t
-    queries = [" ".join(rng.choices(vocab[50:5000], k=4)) for _ in range(30)]
+    query_sets = {
+        "rare": [" ".join(rng.choices(vocab[50:5000], k=4)) for _ in range(30)],
+        "mixed": [
+            " ".join(rng.choices(vocab[:50], k=2) + rng.choices(vocab[50:5000], k=2))
+            for _ in range(30)
+        ],
+        "frequent": [" ".join(rng.choices(vocab[:50], k=4)) for _ in range(30)],
+    }
 
-    def timed(fn):
+    def timed(fn, queries):
         t = time.perf_counter()
         for q in queries:
             fn(idx, q)
         return (time.perf_counter() - t) / len(queries) * 1000
 
-    new_ms = timed(lambda i, q: i.search(q, k=100))
-    old_ms = timed(full_scan)
     print(f"chunks={n}  index build={build:.2f}s")
-    print(f"full scan (<=0.2):     {old_ms:8.2f} ms/query")
-    print(f"inverted index (0.3):  {new_ms:8.2f} ms/query  ({old_ms / new_ms:.1f}x)")
+    print(f"{'queries':>9}  {'full scan (<=0.2)':>18}  {'inverted (0.3)':>15}  speedup")
+    for name, queries in query_sets.items():
+        old_ms = timed(full_scan, queries)
+        new_ms = timed(lambda i, q: i.search(q, k=100), queries)
+        print(f"{name:>9}  {old_ms:>15.2f} ms  {new_ms:>12.2f} ms  {old_ms / new_ms:6.1f}x")
 
 
 if __name__ == "__main__":

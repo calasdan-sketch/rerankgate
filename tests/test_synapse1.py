@@ -176,6 +176,7 @@ def test_missing_vector_file_fails_closed(hybrid_pipeline, tmp_path):
 )
 def test_malformed_chunk_lines_fail_closed(tmp_path, line):
     (tmp_path / "chunks.jsonl").write_text(line + "\n")
+    (tmp_path / "meta.json").write_text('{"chunk_count": 1}')  # legacy 0.2 meta
     with pytest.raises(StoreError, match="line 1"):
         DocumentStore(str(tmp_path)).load()
 
@@ -183,6 +184,7 @@ def test_malformed_chunk_lines_fail_closed(tmp_path, line):
 def test_unknown_chunk_fields_ignored(tmp_path):
     row = {"id": "d#c0", "doc_id": "d", "text": "t", "position": 0, "__class__": "evil"}
     (tmp_path / "chunks.jsonl").write_text(json.dumps(row) + "\n")
+    (tmp_path / "meta.json").write_text('{"chunk_count": 1}')  # legacy 0.2 meta
     chunks, _, _ = DocumentStore(str(tmp_path)).load()
     assert chunks[0].id == "d#c0"
 
@@ -473,3 +475,224 @@ def test_cli_store_path_is_a_file_exit_2(tmp_path, capsys):
     blocker = tmp_path / "blocker"
     blocker.write_text("x")
     assert main(["ingest", "--input", corpus, "--store", str(blocker), "--no-vectors"]) == 2
+
+
+# ------------------------------------------------- panel review fixes (round 1b)
+
+
+class _ConstReranker:
+    name = "const"
+
+    def __init__(self, value):
+        self.value = value
+
+    def rerank(self, query, candidates, k):
+        from rerankgate.retrieval import ScoredChunk
+
+        return [ScoredChunk(c.chunk, self.value, c.sources) for c in candidates[:k]]
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_rerank_score_fails_closed(docs, bad):
+    from rerankgate.gate import INVALID_SCORE
+
+    pipe = RAGPipeline(config=PipelineConfig(use_vectors=False), reranker=_ConstReranker(bad))
+    pipe.ingest(docs)
+    res = pipe.ask("What is retrieval-augmented generation?")
+    assert res.verdict == "insufficient"
+    assert res.gate.reasons == [INVALID_SCORE]
+    json.dumps(res.to_dict())
+
+
+def test_gate_rejects_bool_and_nonnumeric_scores(bm25_pipeline):
+    from rerankgate.gate import INVALID_SCORE, SufficiencyGate
+    from rerankgate.retrieval import ScoredChunk
+
+    ev = bm25_pipeline.retrieve("rust").chunks
+    for bad in (True, "0.9", None):
+        tampered = [ScoredChunk(c.chunk, bad, c.sources) for c in ev]
+        assert SufficiencyGate().evaluate("rust", tampered).reasons == [INVALID_SCORE]
+
+
+def _fresh_store(pipe, tmp_path):
+    store = tmp_path / "s"
+    pipe.save(str(store))
+    return store
+
+
+def test_missing_meta_json_fails_closed(bm25_pipeline, tmp_path):
+    store = _fresh_store(bm25_pipeline, tmp_path)
+    os.unlink(store / "meta.json")
+    with open(store / "chunks.jsonl", "a") as f:
+        f.write(json.dumps({"id": "x#c0", "doc_id": "x", "text": "forged", "position": 0}) + "\n")
+    with pytest.raises(StoreError, match="meta.json is missing"):
+        DocumentStore(str(store)).load()
+
+
+@pytest.mark.parametrize("key", ["chunks_sha256", "chunk_count", "dim", "has_vectors"])
+def test_format2_requires_integrity_fields(bm25_pipeline, tmp_path, key):
+    store = _fresh_store(bm25_pipeline, tmp_path)
+    meta = json.loads((store / "meta.json").read_text())
+    del meta[key]
+    (store / "meta.json").write_text(json.dumps(meta))
+    with pytest.raises(StoreError, match="missing"):
+        DocumentStore(str(store)).load()
+
+
+def test_format2_with_vectors_requires_vector_checksum(hybrid_pipeline, tmp_path):
+    store = _fresh_store(hybrid_pipeline, tmp_path)
+    meta = json.loads((store / "meta.json").read_text())
+    del meta["vectors_sha256"]
+    (store / "meta.json").write_text(json.dumps(meta))
+    with pytest.raises(StoreError, match="vectors_sha256"):
+        DocumentStore(str(store)).load()
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"format": "2"},
+        {"format": 99},
+        {"chunk_count": "3"},
+        {"has_vectors": "yes"},
+        {"dim": -1},
+        {"chunks_sha256": "abc"},
+    ],
+)
+def test_meta_field_types_validated(bm25_pipeline, tmp_path, patch):
+    store = _fresh_store(bm25_pipeline, tmp_path)
+    meta = {**json.loads((store / "meta.json").read_text()), **patch}
+    (store / "meta.json").write_text(json.dumps(meta))
+    with pytest.raises(StoreError):
+        DocumentStore(str(store)).load()
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"id": "d#c0", "doc_id": "d", "text": "t", "position": "x"},
+        {"id": "d#c0", "doc_id": None, "text": "t", "position": 0},
+        {"id": "d#c0", "doc_id": "d", "text": "t", "position": True},
+        {"id": "d#c0", "doc_id": "d", "text": "t", "position": -1},
+    ],
+)
+def test_chunk_field_types_validated(tmp_path, row):
+    (tmp_path / "chunks.jsonl").write_text(json.dumps(row) + "\n")
+    (tmp_path / "meta.json").write_text('{"chunk_count": 1}')
+    with pytest.raises(StoreError, match="line 1"):
+        DocumentStore(str(tmp_path)).load()
+
+
+def test_nan_in_vector_file_is_store_error(hybrid_pipeline, tmp_path):
+    import hashlib
+    import struct
+
+    store = _fresh_store(hybrid_pipeline, tmp_path)
+    data = bytearray((store / "vectors.f32").read_bytes())
+    data[0:4] = struct.pack("<f", float("nan"))
+    (store / "vectors.f32").write_bytes(bytes(data))
+    meta = json.loads((store / "meta.json").read_text())
+    meta["vectors_sha256"] = hashlib.sha256(bytes(data)).hexdigest()
+    (store / "meta.json").write_text(json.dumps(meta))
+    with pytest.raises(StoreError, match="NaN"):
+        DocumentStore(str(store)).load()
+
+
+def test_calibrate_no_recommendation_when_nothing_passes(bm25_pipeline):
+    items = [
+        EvalItem("zebra quantum lattice", ["doc-rag"], True),
+        EvalItem("xylophone concerto tickets", [], False),
+    ]
+    rep = bm25_pipeline.calibrate(items)
+    assert all(r["gate_recall"] == 0 for r in rep["sweep"])
+    assert rep["recommended_threshold"] is None
+
+
+def test_cli_calibrate_nothing_passes_exit_1(cli_store, tmp_path, capsys):
+    q = _write(
+        tmp_path / "q.jsonl",
+        [
+            {"query": "zebra quantum lattice", "relevant_ids": ["rag"]},
+            {"query": "xylophone concerto", "relevant_ids": [], "answerable": False},
+        ],
+    )
+    assert main(["calibrate", "--store", cli_store, "--qrels", q, "--no-vectors"]) == 1
+    assert "none" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("हिन्दी भाषा", ["हिन्दी", "भाषा"]),
+        ("العَرَبِيَّة لغة", ["العَرَبِيَّة", "لغة"]),
+        ("שָׁלוֹם עוֹלָם", ["שָׁלוֹם", "עוֹלָם"]),
+        ("𠀀𠀁x", ["𠀀", "𠀁", "x"]),  # CJK Extension B
+        ("𰀀", ["𰀀"]),  # CJK Extension G
+    ],
+)
+def test_combining_marks_and_cjk_extensions(text, expected):
+    assert tokenize(text) == expected
+
+
+def test_hindi_retrieval_end_to_end():
+    pipe = RAGPipeline(config=PipelineConfig(use_vectors=False))
+    pipe.ingest(
+        [
+            Document(id="hi", text="हिन्दी भारत की एक प्रमुख भाषा है।"),
+            Document(id="en", text="Python is a programming language."),
+        ]
+    )
+    assert pipe.retrieve("हिन्दी भाषा").chunks[0].chunk.doc_id == "hi"
+
+
+@pytest.mark.parametrize("bad", [True, False, 7, -0.5, 1.0000001, 10**400, "7"])
+def test_llm_judge_rejects_out_of_contract_values(bad):
+    assert LLMJudge(lambda a, e: bad).check("x", []).score == 0.0
+
+
+@pytest.mark.parametrize("good", [0, 0.0, 0.42, 1, "0.9"])
+def test_llm_judge_accepts_valid_scores(good):
+    assert LLMJudge(lambda a, e: good).check("x", []).score == round(float(good), 4)
+
+
+def _bm25_v02_search(index: BM25Index, query: str, k: int = 100):
+    """Verbatim copy of the rerankgate 0.2 full-scan BM25 search."""
+    q_terms = tokenize(query)
+    if not q_terms or not index._chunks:
+        return []
+    idfs = {t: index._idf(t) for t in set(q_terms)}
+    scored = []
+    for i, ch in enumerate(index._chunks):
+        tf = index._term_freqs[i]
+        dl = index._doc_lens[i]
+        norm = 1 - index.b + index.b * (dl / index._avg_len) if index._avg_len else 1.0
+        score = 0.0
+        for t in q_terms:
+            f = tf.get(t, 0)
+            if f and idfs[t]:
+                score += idfs[t] * (f * (index.k1 + 1)) / (f + index.k1 * norm)
+        if score > 0:
+            scored.append((ch, score))
+    scored.sort(key=lambda p: p[1], reverse=True)
+    return scored[:k]
+
+
+@pytest.mark.parametrize("seed", [1, 7, 42])
+def test_bm25_bit_identical_to_v02_including_order(seed):
+    """Differential test: same ids, same order, same float scores (==, no tolerance)."""
+    rng = random.Random(seed)
+    vocab = [f"w{i}" for i in range(40)]
+    chunks = []
+    for i in range(300):
+        n = rng.randint(1, 25)
+        chunks.append(Chunk(f"d{i}#c0", f"d{i}", " ".join(rng.choices(vocab, k=n)), 0))
+    # Exact duplicates force ties between different documents.
+    chunks += [Chunk(f"dup{i}#c0", f"dup{i}", chunks[i].text, 0) for i in range(30)]
+    idx = BM25Index()
+    idx.add(chunks)
+    for _ in range(1500):
+        q = " ".join(rng.choices(vocab, k=rng.randint(1, 6)))  # repeats common
+        for k in (5, 100, 1000):
+            got = [(c.id, s) for c, s in idx.search(q, k=k)]
+            want = [(c.id, s) for c, s in _bm25_v02_search(idx, q, k=k)]
+            assert got == want, q

@@ -75,7 +75,11 @@ class HeuristicJudge:
 
 
 class LLMJudge:
-    """Wrap any callable as a model-based judge: fn(answer, evidence_texts) -> float in [0,1]."""
+    """Wrap any callable as a model-based judge: fn(answer, evidence_texts) -> float in [0,1].
+
+    Anything else the callable returns (bools, values outside [0, 1], NaN/inf,
+    non-numbers) scores 0.0, which fails the faithfulness floor.
+    """
 
     name = "llm"
 
@@ -85,11 +89,14 @@ class LLMJudge:
     def check(self, answer: str, evidence: list[ScoredChunk]) -> FaithfulnessReport:
         import math
 
+        raw = self._fn(answer, [c.chunk.text for c in evidence])
         try:
-            score = float(self._fn(answer, [c.chunk.text for c in evidence]))
-        except (TypeError, ValueError):
+            # bool is an int subclass: True must not read as "fully faithful".
+            score = 0.0 if isinstance(raw, bool) else float(raw)
+        except (TypeError, ValueError, OverflowError):
             score = 0.0  # unparseable judge output fails closed
-        if not math.isfinite(score):
-            score = 0.0  # NaN/inf must never count as "faithful"
-        score = max(0.0, min(1.0, score))
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            # NaN/inf, or a value on some other scale (e.g. 7 out of 10), is a
+            # broken judge contract: score 0 rather than clamp it to "faithful".
+            score = 0.0
         return FaithfulnessReport(score=round(score, 4))

@@ -1,6 +1,8 @@
 """Shared tokenization and stopwords.
 
-Unicode-aware: text is NFKC-normalized and case-folded, so "Café", "CAFÉ" and
+Unicode-aware: tokens are runs of letters, numbers and combining marks (so
+Devanagari, Arabic and Hebrew words stay whole); text is NFKC-normalized and
+case-folded, so "Café", "CAFÉ" and
 "café" are one token, and full-width digits/letters match their ASCII forms.
 Chinese/Japanese ideographs, kana and Hangul syllables are split into single
 characters (Thai and other unspaced scripts are not handled), which gives BM25 something to match
@@ -11,21 +13,48 @@ linguistic segmenter.
 from __future__ import annotations
 
 import re
+import sys
 import unicodedata
+from functools import lru_cache
 
-# Letters/digits in any script (no underscore).
-_TOKEN = re.compile(r"[^\W_]+")
+
+@lru_cache(maxsize=1)
+def _token_re() -> re.Pattern[str]:
+    r"""Token = run of letters (L*), numbers (N*) and combining marks (M*).
+
+    `[^\W_]` alone covers letters and numbers but not combining marks, which
+    would shred Devanagari, Arabic with harakat, Hebrew with niqqud, etc.
+    The mark ranges are built once, lazily, from this Python's Unicode data.
+    """
+    ranges: list[str] = []
+    start = None
+    for cp in range(sys.maxunicode + 1):
+        is_mark = unicodedata.category(chr(cp)).startswith("M")
+        if is_mark and start is None:
+            start = cp
+        elif not is_mark and start is not None:
+            ranges.append(f"{_esc(start)}-{_esc(cp - 1)}")
+            start = None
+    if start is not None:  # pragma: no cover - no marks at the very top
+        ranges.append(f"{_esc(start)}-{_esc(sys.maxunicode)}")
+    return re.compile(r"(?:[^\W_]|[" + "".join(ranges) + "])+")
+
+
+def _esc(cp: int) -> str:
+    return f"\\U{cp:08x}"
+
 
 # CJK ideographs, kana, and Hangul syllables: tokenized one character at a time.
 _CJK = re.compile(
-    "["
-    "぀-ゟ"  # Hiragana
-    "゠-ヿ"  # Katakana
-    "㐀-䶿"  # CJK Extension A
-    "一-鿿"  # CJK Unified Ideographs
-    "가-힯"  # Hangul syllables
-    "豈-﫿"  # CJK Compatibility Ideographs
-    "]"
+    r"["
+    r"぀-ゟ"  # Hiragana
+    r"゠-ヿ"  # Katakana
+    r"㐀-䶿"  # CJK Extension A
+    r"一-鿿"  # CJK Unified Ideographs
+    r"가-힯"  # Hangul syllables
+    r"豈-﫿"  # CJK Compatibility Ideographs
+    r"\U00020000-\U000323af"  # CJK Extensions B-H/I + Compatibility Supplement
+    r"]"
 )
 
 STOPWORDS = frozenset(
@@ -48,7 +77,7 @@ def _normalize(text: str) -> str:
 def tokenize(text: str) -> list[str]:
     """Case-folded word tokens in any script; CJK split per character."""
     out: list[str] = []
-    for tok in _TOKEN.findall(_normalize(text)):
+    for tok in _token_re().findall(_normalize(text)):
         if _CJK.search(tok):
             # Split CJK runs into characters, keep embedded non-CJK runs whole.
             buf = ""

@@ -335,6 +335,7 @@ class RAGPipeline:
         - with `target_precision`: the threshold with the highest gate recall
           whose gate precision is >= the target (ties -> stricter threshold);
           `None` if no threshold reaches the target.
+        - `None` as well when every threshold has zero recall / zero F1.
         - otherwise: the threshold with the best F1 of gate precision/recall
           (ties -> stricter threshold).
 
@@ -385,6 +386,11 @@ class RAGPipeline:
         else:
             best = max(rows, key=lambda row: (row["f1"], row["threshold"]))
             rule = "max F1"
+        if best is not None and (best["f1"] <= 0 or best["gate_recall"] <= 0):
+            # No threshold lets a single answerable query through: any pick
+            # would just reject everything. Fail closed with no recommendation.
+            best = None
+            rule += " (no threshold passes any answerable query)"
         return {
             "n": len(items),
             "rule": rule,

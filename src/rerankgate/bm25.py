@@ -59,17 +59,27 @@ class BM25Index:
         q_terms = tokenize(query)
         if not q_terms or not self._chunks or k <= 0:
             return []
-        q_counts = Counter(q_terms)  # repeated query terms weigh more, as before
-        k1, b, avg = self.k1, self.b, self._avg_len
-        scores: dict[int, float] = {}
-        for term, qtf in q_counts.items():
-            idf = self._idf(term)
+        # Each query-term contribution is computed once per (term, chunk), then
+        # added once per *occurrence*, in query order, with exactly the same
+        # float expression as the 0.2 full scan. Floating-point addition is
+        # not associative, so this is what keeps scores and ranking order
+        # bit-identical to the old path (repeated terms included).
+        contrib: dict[str, dict[int, float]] = {}
+        for t in set(q_terms):
+            idf = self._idf(t)
             if not idf:
                 continue
-            for idx, f in self._postings.get(term, ()):
+            per_chunk: dict[int, float] = {}
+            for idx, f in self._postings.get(t, ()):
                 dl = self._doc_lens[idx]
-                norm = 1 - b + b * (dl / avg) if avg else 1.0
-                scores[idx] = scores.get(idx, 0.0) + qtf * idf * (f * (k1 + 1)) / (f + k1 * norm)
+                norm = 1 - self.b + self.b * (dl / self._avg_len) if self._avg_len else 1.0
+                per_chunk[idx] = idf * (f * (self.k1 + 1)) / (f + self.k1 * norm)
+            contrib[t] = per_chunk
+        scores: dict[int, float] = {}
+        for t in q_terms:
+            for idx, c in contrib.get(t, {}).items():
+                scores[idx] = scores.get(idx, 0.0) + c
+        # Same order as the old stable sort: score desc, then insertion order.
         top = heapq.nsmallest(k, ((-s, i) for i, s in scores.items() if s > 0))
         return [(self._chunks[i], -neg) for neg, i in top]
 

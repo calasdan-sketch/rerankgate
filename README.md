@@ -121,7 +121,7 @@ The sufficiency gate is a fixed weighted heuristic over interpretable features �
 top rerank score, query-term coverage, ranking margin, and cross-chunk support —
 plus hard floors on coverage and top score. Every decision carries stable
 machine-readable reason codes (`PASS`, `LOW_TOP_SCORE`, `LOW_COVERAGE`,
-`NO_MARGIN`, `NO_CONSENSUS`, `NO_EVIDENCE`) and a human explanation. Nothing is
+`NO_MARGIN`, `NO_CONSENSUS`, `NO_EVIDENCE`, `INVALID_SCORE`) and a human explanation. Nothing is
 learned, so there's nothing to overfit; tune it with the eval CLI.
 
 Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
@@ -142,9 +142,13 @@ Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
 
 ## Safety and robustness
 
-- **Tamper-evident stores.** `meta.json` records SHA-256 checksums and counts;
-  a modified, truncated or half-written store raises `StoreError` instead of
+- **Corruption-checked stores.** `meta.json` (required) records counts and
+  SHA-256 checksums, and every field type is validated; a truncated,
+  half-written or accidentally edited store raises `StoreError` instead of
   serving wrong results. Files are written atomically (temp file + rename).
+  The checksums have no secret key, so they detect *corruption*, not
+  deliberate tampering — anyone who can write the store can recompute them;
+  protect the directory with file permissions.
 - **Vectors persist without numpy** (raw float32 via the stdlib), so custom
   embedding backends (e.g. a hosted API) work with zero extra installs.
   Stores written by 0.2 (`vectors.npy`) still load.
@@ -152,9 +156,12 @@ Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
   loaded with a different one — even if the vector size matches.
 - **Terminal-safe output.** Corpus text is untrusted: the CLI escapes ANSI
   control sequences, bidi overrides and zero-width characters as `\uXXXX`.
-- **Fail-closed defaults.** Duplicate document ids, NaN/inf embeddings, an
-  LLM judge returning NaN or garbage, and nonsensical gate settings (threshold
-  0, all weights 0) are rejected rather than silently passing.
+- **Fail-closed defaults.** A NaN/inf/non-numeric reranker score fails the
+  gate with `INVALID_SCORE`. Duplicate document ids, NaN/inf embeddings,
+  nonsensical gate settings (threshold 0, all weights 0) are rejected. An
+  `LLMJudge` returning NaN, a bool, a non-number or anything outside [0, 1]
+  (e.g. "7" on a 0–10 scale) scores 0. `calibrate` gives no recommendation
+  (exit 1) when no threshold lets any answerable query through.
 
 ## How it compares
 
@@ -176,9 +183,21 @@ tools above are complementary (run them offline on what passes the gate).
 ## Performance
 
 BM25 search uses an inverted index (0.3+): a query only touches chunks that
-contain its terms. On a synthetic 20,000-chunk corpus, a 2-vCPU x86_64 cloud VM
-measured 18.0 ms/query for the old full scan vs 0.57 ms/query for the inverted
-index (~31x). Reproduce on your machine with
+contain at least one of its terms. Results (ids, order and scores) are
+bit-identical to the 0.2 full scan — a differential test checks this.
+
+How much faster it is depends on the query. On a synthetic 20,000-chunk corpus
+(2-vCPU x86_64 cloud VM, one run):
+
+| Query mix | Full scan (0.2) | Inverted index (0.3) | Speedup |
+|---|---|---|---|
+| rare terms only (specific keywords) | 14.8 ms | 0.38 ms | ~39x |
+| mixed: 2 very common + 2 rarer terms (closest to natural questions) | 27.2 ms | 5.2 ms | ~5x |
+| very common terms only (worst case) | 32.1 ms | 11.6 ms | ~3x |
+
+BM25 keeps stopwords, so a question such as "what is the …" touches most
+chunks: expect the lower end (roughly 3–5x) for natural-language questions and
+the higher end for keyword queries. Reproduce with
 `python benchmarks/bench_bm25.py 20000`; numbers vary by hardware and corpus.
 The numpy vector path now caches its normalized matrix instead of rebuilding
 it per query.
@@ -186,8 +205,10 @@ it per query.
 ## Limitations (honest)
 
 - The heuristic gate is keyword-overlap based. Tokenization is Unicode-aware
-  (accents, Cyrillic, Greek etc. work; Chinese/Japanese/Korean are split per
-  character) but stopwords are English-only and there is no stemming, so
+  (letters, numbers and combining marks, so accents, Cyrillic, Greek, Hindi,
+  Arabic and Hebrew words stay whole; Chinese/Japanese/Korean, including CJK
+  Extensions B+, are split per character). Marks are not stripped, so Arabic or
+  Hebrew with vowel marks won't match the same word written without them. And stopwords are English-only and there is no stemming, so
   synonym-heavy, cross-lingual or highly abstract queries can under-score — use
   hybrid vectors and/or the `lenient` preset, and run `rerankgate calibrate`.
   Thai and other unspaced scripts are not segmented.
