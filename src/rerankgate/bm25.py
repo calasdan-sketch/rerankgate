@@ -1,7 +1,12 @@
-"""Pure-stdlib BM25 (Okapi) index over chunks."""
+"""Pure-stdlib BM25 (Okapi) index over chunks, backed by an inverted index.
+
+Queries only touch the postings of their own terms, so query cost scales with
+the number of chunks that *contain* a query term rather than with corpus size.
+"""
 
 from __future__ import annotations
 
+import heapq
 import math
 from collections import Counter
 
@@ -20,6 +25,8 @@ class BM25Index:
         self._term_freqs: list[Counter[str]] = []
         self._doc_lens: list[int] = []
         self._avg_len: float = 0.0
+        # term -> list of (chunk index, term frequency)
+        self._postings: dict[str, list[tuple[int, int]]] = {}
 
     def __len__(self) -> int:
         return len(self._chunks)
@@ -28,11 +35,13 @@ class BM25Index:
         for ch in chunks:
             toks = tokenize(ch.text)
             tf = Counter(toks)
+            idx = len(self._chunks)
             self._chunks.append(ch)
             self._term_freqs.append(tf)
             self._doc_lens.append(len(toks))
-            for term in tf:
+            for term, f in tf.items():
                 self._doc_freq[term] += 1
+                self._postings.setdefault(term, []).append((idx, f))
         total = sum(self._doc_lens)
         self._avg_len = total / len(self._doc_lens) if self._doc_lens else 0.0
 
@@ -43,25 +52,36 @@ class BM25Index:
         return math.log(1 + (n - df + 0.5) / (df + 0.5)) if df else 0.0
 
     def search(self, query: str, k: int = 100) -> list[tuple[Chunk, float]]:
-        """Return top-k (chunk, score) pairs, highest score first."""
+        """Return top-k (chunk, score) pairs, highest score first.
+
+        Ties are broken by insertion order, so results are deterministic.
+        """
         q_terms = tokenize(query)
-        if not q_terms or not self._chunks:
+        if not q_terms or not self._chunks or k <= 0:
             return []
-        idfs = {t: self._idf(t) for t in set(q_terms)}
-        scored: list[tuple[Chunk, float]] = []
-        for i, ch in enumerate(self._chunks):
-            tf = self._term_freqs[i]
-            dl = self._doc_lens[i]
-            norm = 1 - self.b + self.b * (dl / self._avg_len) if self._avg_len else 1.0
-            score = 0.0
-            for t in q_terms:
-                f = tf.get(t, 0)
-                if f and idfs[t]:
-                    score += idfs[t] * (f * (self.k1 + 1)) / (f + self.k1 * norm)
-            if score > 0:
-                scored.append((ch, score))
-        scored.sort(key=lambda p: p[1], reverse=True)
-        return scored[:k]
+        # Each query-term contribution is computed once per (term, chunk), then
+        # added once per *occurrence*, in query order, with exactly the same
+        # float expression as the 0.2 full scan. Floating-point addition is
+        # not associative, so this is what keeps scores and ranking order
+        # bit-identical to the old path (repeated terms included).
+        contrib: dict[str, dict[int, float]] = {}
+        for t in set(q_terms):
+            idf = self._idf(t)
+            if not idf:
+                continue
+            per_chunk: dict[int, float] = {}
+            for idx, f in self._postings.get(t, ()):
+                dl = self._doc_lens[idx]
+                norm = 1 - self.b + self.b * (dl / self._avg_len) if self._avg_len else 1.0
+                per_chunk[idx] = idf * (f * (self.k1 + 1)) / (f + self.k1 * norm)
+            contrib[t] = per_chunk
+        scores: dict[int, float] = {}
+        for t in q_terms:
+            for idx, c in contrib.get(t, {}).items():
+                scores[idx] = scores.get(idx, 0.0) + c
+        # Same order as the old stable sort: score desc, then insertion order.
+        top = heapq.nsmallest(k, ((-s, i) for i, s in scores.items() if s > 0))
+        return [(self._chunks[i], -neg) for neg, i in top]
 
     def term_stats(self, chunk_idx: int) -> Counter[str]:
         return self._term_freqs[chunk_idx]

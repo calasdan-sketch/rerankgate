@@ -24,6 +24,7 @@ class VectorStore:
         self.dim = dim
         self._chunks: list[Chunk] = []
         self._vectors: list[list[float]] = []
+        self._matrix = None  # cached numpy matrix of row-normalized vectors
 
     def __len__(self) -> int:
         return len(self._chunks)
@@ -36,23 +37,33 @@ class VectorStore:
     def add(self, chunks: list[Chunk], vectors: list[list[float]]) -> None:
         if len(chunks) != len(vectors):
             raise ValueError("chunks and vectors must have equal length")
+        clean: list[list[float]] = []
         for v in vectors:
             if len(v) != self.dim:
                 raise ValueError(f"expected dim {self.dim}, got {len(v)}")
+            row = [float(x) for x in v]
+            if not all(math.isfinite(x) for x in row):
+                raise ValueError("embedding contains NaN or infinite values")
+            clean.append(row)
         self._chunks.extend(chunks)
-        self._vectors.extend([list(map(float, v)) for v in vectors])
+        self._vectors.extend(clean)
+        self._matrix = None
 
     def search(self, query_vec: list[float], k: int = 100) -> list[tuple[Chunk, float]]:
         """Top-k (chunk, cosine similarity) pairs, highest first."""
-        if not self._chunks:
+        if not self._chunks or k <= 0:
             return []
+        if len(query_vec) != self.dim:
+            raise ValueError(f"query vector has dim {len(query_vec)}, expected {self.dim}")
         if _HAS_NUMPY:
-            mat = _np.asarray(self._vectors, dtype=_np.float64)
+            if self._matrix is None:
+                mat = _np.asarray(self._vectors, dtype=_np.float64)
+                norms = _np.linalg.norm(mat, axis=1)
+                norms[norms == 0] = 1.0
+                self._matrix = mat / norms[:, None]
             q = _np.asarray(query_vec, dtype=_np.float64)
             qn = _np.linalg.norm(q) or 1.0
-            norms = _np.linalg.norm(mat, axis=1)
-            norms[norms == 0] = 1.0
-            sims = (mat @ q) / (norms * qn)
+            sims = (self._matrix @ q) / qn
             order = _np.argsort(-sims, kind="stable")[:k]
             return [(self._chunks[i], float(sims[i])) for i in order]
         # Pure-python fallback.

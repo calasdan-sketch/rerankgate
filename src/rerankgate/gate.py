@@ -7,6 +7,7 @@ threshold tuned with `rerankgate eval`.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from time import perf_counter
 
@@ -21,6 +22,7 @@ LOW_COVERAGE = "LOW_COVERAGE"
 NO_MARGIN = "NO_MARGIN"
 NO_CONSENSUS = "NO_CONSENSUS"
 NO_EVIDENCE = "NO_EVIDENCE"
+INVALID_SCORE = "INVALID_SCORE"
 
 _EXPLANATIONS = {
     PASS: "Retrieved evidence is sufficient to answer.",
@@ -29,6 +31,7 @@ _EXPLANATIONS = {
     NO_MARGIN: "Top chunks score almost identically — no clear winner, ambiguous retrieval.",
     NO_CONSENSUS: "Top chunks don't corroborate each other — evidence is fragmented.",
     NO_EVIDENCE: "Retrieval returned no candidates at all.",
+    INVALID_SCORE: "A reranker score was NaN, infinite or not a number — refusing to trust it.",
 }
 
 
@@ -81,6 +84,18 @@ class SufficiencyGate:
     def evaluate(self, query: str, evidence: list[ScoredChunk]) -> GateDecision:
         t0 = perf_counter()
         cfg = self.config
+        if any(not _finite(c.score) for c in evidence):
+            # min(1.0, nan) == 1.0 in Python: a NaN/inf score must never be
+            # allowed to flow into the weighted sum. Fail closed.
+            return GateDecision(
+                passed=False,
+                score=0.0,
+                features=GateFeatures(),
+                reasons=[INVALID_SCORE],
+                explanation=_EXPLANATIONS[INVALID_SCORE],
+                threshold=cfg.threshold,
+                ms=_ms(t0),
+            )
         features = self._features(query, evidence)
         reasons: list[str] = []
 
@@ -165,6 +180,10 @@ class SufficiencyGate:
         return GateFeatures(
             top_score=norm_top, coverage=coverage, margin=margin, support=support, depth=depth
         )
+
+
+def _finite(x: object) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
 def _ms(t0: float) -> float:

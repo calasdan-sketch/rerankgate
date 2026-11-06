@@ -17,7 +17,7 @@ _SENT = re.compile(r"(?<=[.!?])\s+")
 class FaithfulnessReport:
     score: float  # mean per-sentence grounding, [0,1]
     unsupported: list[str] = field(default_factory=list)  # sentences below the floor
-    per_sentence: list[dict] = field(default_factory=dict)
+    per_sentence: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -34,11 +34,15 @@ class Judge(Protocol):
 
 
 class HeuristicJudge:
-    """Ground every answer sentence in the evidence via token-overlap F1.
+    """Ground every answer sentence in the evidence via token precision.
 
-    A sentence is 'supported' if some evidence chunk shares enough content
-    tokens (F1 >= 0.35 by default). Heuristic — documented as such — but
-    free, instant, and dependency-free.
+    A sentence's grounding is the largest fraction of its content tokens that
+    appear in any single evidence chunk. A sentence is 'supported' when that
+    fraction reaches the floor (0.35 by default). Heuristic — documented as
+    such — but free, instant, and dependency-free.
+
+    (rerankgate <= 0.2 used token F1 against the whole chunk, which punished
+    short, correct sentences quoted from long chunks.)
     """
 
     name = "heuristic"
@@ -57,11 +61,7 @@ class HeuristicJudge:
             for ev in ev_sets:
                 if not s_toks or not ev:
                     continue
-                inter = s_toks & ev
-                prec = len(inter) / len(s_toks)
-                rec = len(inter) / len(ev)
-                f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
-                best = max(best, f1)
+                best = max(best, len(s_toks & ev) / len(s_toks))
             per_sentence.append({"sentence": s, "grounding": round(best, 4)})
             if best < self.support_floor:
                 unsupported.append(s)
@@ -75,7 +75,11 @@ class HeuristicJudge:
 
 
 class LLMJudge:
-    """Wrap any callable as a model-based judge: fn(answer, evidence_texts) -> float in [0,1]."""
+    """Wrap any callable as a model-based judge: fn(answer, evidence_texts) -> float in [0,1].
+
+    Anything else the callable returns (bools, values outside [0, 1], NaN/inf,
+    non-numbers) scores 0.0, which fails the faithfulness floor.
+    """
 
     name = "llm"
 
@@ -83,6 +87,16 @@ class LLMJudge:
         self._fn = fn
 
     def check(self, answer: str, evidence: list[ScoredChunk]) -> FaithfulnessReport:
-        score = float(self._fn(answer, [c.chunk.text for c in evidence]))
-        score = max(0.0, min(1.0, score))
+        import math
+
+        raw = self._fn(answer, [c.chunk.text for c in evidence])
+        try:
+            # bool is an int subclass: True must not read as "fully faithful".
+            score = 0.0 if isinstance(raw, bool) else float(raw)
+        except (TypeError, ValueError, OverflowError):
+            score = 0.0  # unparseable judge output fails closed
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            # NaN/inf, or a value on some other scale (e.g. 7 out of 10), is a
+            # broken judge contract: score 0 rather than clamp it to "faithful".
+            score = 0.0
         return FaithfulnessReport(score=round(score, 4))
