@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rerankgate"
-version = "0.3.0"
+version = "0.4.0"
 description = "Agentic RAG quality gate: hybrid retrieval with a sufficiency gate, query-rewrite retries, and per-stage metrics. Local-first."
 readme = "README.md"
 license = { text = "MIT" }

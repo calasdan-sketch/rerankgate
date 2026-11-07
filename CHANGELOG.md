@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.0 - unreleased (expert round 2)
+
+### Added
+- `rerankgate conformal` / `RAGPipeline.conformal_gate()`: threshold with a finite-sample
+  false-answer-rate guarantee (split conformal; or high-probability with `--delta`), fail
+  closed (gate never passes) when there are too few unanswerable calibration queries.
+  `--gate-file` on every command applies the saved threshold.
+- `rerankgate.calibration` (exact binomial/order-statistic maths, p-values, Wilson).
+- `ScoreGate`: the same calibrated decision for raw scores from any retriever/reranker,
+  with conformal p-values and JSON save/load.
+- `rerankgate.selective` + `rerankgate riskcov`: risk-coverage curve, AURC, abstention
+  precision/recall, false-answer rate.
+- `GateMonitor` / `Baseline`: thread-safe drift monitor (abstain-rate z-test, PSI, KS,
+  latency p95, invalid scores); `pipe.monitor` records every `ask()`.
+- `explain_abstention()`: what to show the user (kind, next action, missing terms,
+  nearest sources labelled "does not answer", clarifying question), no LLM.
+- `benchmarks/bench_gate.py`, `build_dataset.py`, committed data and `results.json`.
+- `gate.effective_score()`, `RAGPipeline.score_results()`, `trace["gate_score"]`.
+
+### Fixed
+- HIGH: query-rewrite retries were circular. The reranker and gate were run on the
+  *expanded* query, whose extra terms were taken from the evidence itself, so unanswerable
+  queries passed after a retry (27 -> 119 of 223 on the benchmark). Both now use the
+  original query; expansion only widens the candidate pool.
+- A passing retry attempt could lose to an earlier, higher-scored attempt that had failed
+  a hard floor; passing attempts now win.
+- The gate compared the unrounded score but reported (and now calibrates on) the score
+  rounded to 4 places; the comparison uses the rounded value.
+
+### Changed
+- Retry behaviour change as above: `retries_used` and verdicts on some borderline
+  queries differ from 0.3 (fewer false passes).
+
 ## 0.3.0 — unreleased
 
 ### Added

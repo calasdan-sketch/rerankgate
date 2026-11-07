@@ -1,0 +1,440 @@
+{"query": "configparser responsible configuration managing parsed", "relevant_ids": ["configparser"], "answerable": true, "kind": "answerable"}
+{"query": "irfft real discrete fourier", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "main runs waits complete completedprocess", "relevant_ids": ["subprocess"], "answerable": true, "kind": "answerable"}
+{"query": "items cls metaclass discovered listed", "relevant_ids": ["inspect.classify_class_attrs"], "answerable": true, "kind": "answerable"}
+{"query": "averaging ratios rates speeds", "relevant_ids": ["statistics.harmonic_mean"], "answerable": true, "kind": "answerable"}
+{"query": "frozen fields assigned instance creation", "relevant_ids": ["dataclasses.dataclass"], "answerable": true, "kind": "answerable"}
+{"query": "additional module-specific found docstring interest", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "category may one lc except", "relevant_ids": ["locale.getlocale"], "answerable": true, "kind": "answerable"}
+{"query": "globals executed fit intercept", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "runtime newtype tp dummy", "relevant_ids": ["typing.NewType"], "answerable": true, "kind": "answerable"}
+{"query": "callback keyedref getting enclosing", "relevant_ids": ["weakref.KeyedRef"], "answerable": true, "kind": "answerable"}
+{"query": "strings ending newline", "relevant_ids": ["traceback.format_exception_only"], "answerable": true, "kind": "answerable"}
+{"query": "optimizeresult optimization optimizers", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "symlinks won followed", "relevant_ids": ["shutil.copy"], "answerable": true, "kind": "answerable"}
+{"query": "exception message augmented information caused", "relevant_ids": ["argparse.ArgumentError"], "answerable": true, "kind": "answerable"}
+{"query": "system arguments transferfunction instantiated", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "shell style everything", "relevant_ids": ["fnmatch.fnmatch"], "answerable": true, "kind": "answerable"}
+{"query": "merge dog horse", "relevant_ids": ["heapq.merge"], "answerable": true, "kind": "answerable"}
+{"query": "lmtp generally mileage", "relevant_ids": ["smtplib.LMTP"], "answerable": true, "kind": "answerable"}
+{"query": "getpasswarning unable turn echo", "relevant_ids": ["getpass.getpass"], "answerable": true, "kind": "answerable"}
+{"query": "history of the Roman aqueducts", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "arguments update wrapper", "relevant_ids": ["functools.wraps"], "answerable": true, "kind": "answerable"}
+{"query": "determined set array like", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "choice two options determined vectorized", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "measure execution timeit", "relevant_ids": ["timeit.Timer"], "answerable": true, "kind": "answerable"}
+{"query": "bias intercept added predictor coef", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "what to pack for a camping trip", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "what is the capital of Mongolia", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "operate translating copy bool", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "attempt made server", "relevant_ids": ["smtplib.SMTPNotSupportedError"], "answerable": true, "kind": "answerable"}
+{"query": "mode boundary convolution", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "constructed follows prec emin emax", "relevant_ids": ["decimal.Context"], "answerable": true, "kind": "answerable"}
+{"query": "events manage reset clear", "relevant_ids": ["threading.Event"], "answerable": true, "kind": "answerable"}
+{"query": "monetary thousands separator grouping forth", "relevant_ids": ["locale.format_string"], "answerable": true, "kind": "answerable"}
+{"query": "yiq luminance composite", "relevant_ids": ["colorsys"], "answerable": true, "kind": "answerable"}
+{"query": "how do tides work", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "dataclass assert literal translation", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "ending newline mt dxsm", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "dir fd left unspecified", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "ipv addresses whiten unit-variance", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "methodcaller name call returns", "relevant_ids": ["operator.methodcaller"], "answerable": true, "kind": "answerable"}
+{"query": "variants leading ndarray contain", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "stateless transformations taking log frequencies", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "threadpoolctl github most-used", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "extension guessed type none returned", "relevant_ids": ["mimetypes.guess_extension"], "answerable": true, "kind": "answerable"}
+{"query": "declared kt keyerror", "relevant_ids": ["typing.Generic"], "answerable": true, "kind": "answerable"}
+{"query": "guide hierarchical clustering", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "runs faster mean", "relevant_ids": ["statistics.fmean"], "answerable": true, "kind": "answerable"}
+{"query": "how do vaccines train the immune system", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "rb xb ab xt", "relevant_ids": ["gzip.open"], "answerable": true, "kind": "answerable"}
+{"query": "simple useful especially debugging structures", "relevant_ids": ["pprint"], "answerable": true, "kind": "answerable"}
+{"query": "how do I train for a half marathon", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "value given extend multi-class", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "metric euclidean compute linkage", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "how to remove a red wine stain", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "symptoms of seasonal allergies", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "extend recognize implement serializable superclass", "relevant_ids": ["json.JSONEncoder"], "answerable": true, "kind": "answerable"}
+{"query": "property enum look map", "relevant_ids": ["enum.property"], "answerable": true, "kind": "answerable"}
+{"query": "two standard representations time", "relevant_ids": ["time"], "answerable": true, "kind": "answerable"}
+{"query": "command-line associated stateless transformations", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "concrete setitem tol e-", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "generators share state", "relevant_ids": ["random.Random"], "answerable": true, "kind": "answerable"}
+{"query": "versionadded estimator renamed", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "blocksize tobsr construct defaulting", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "doesn worry compression access allowed", "relevant_ids": ["gzip"], "answerable": true, "kind": "answerable"}
+{"query": "purepath pureposixpath purewindowspath", "relevant_ids": ["pathlib.PurePath"], "answerable": true, "kind": "answerable"}
+{"query": "what causes the northern lights", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "rescale epsilon achieve robustness", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "caller responsible deleting done", "relevant_ids": ["tempfile.mkdtemp"], "answerable": true, "kind": "answerable"}
+{"query": "defaultdict compares max iter", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "feasible dense constraint throughout", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "general perform libraries highly", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "expansions late demand", "relevant_ids": ["configparser.BasicInterpolation"], "answerable": true, "kind": "answerable"}
+{"query": "principal pca kernelized kpca sphx", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "black-box introducing construction", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "device str place created array", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "concrete getitem versionadded fpr", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "name file file-like", "relevant_ids": ["tarfile.is_tarfile"], "answerable": true, "kind": "answerable"}
+{"query": "spacing sampling rate", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "option found dictionary", "relevant_ids": ["configparser.DuplicateOptionError"], "answerable": true, "kind": "answerable"}
+{"query": "ipv addresses supplied less", "relevant_ids": ["ipaddress.ip_interface"], "answerable": true, "kind": "answerable"}
+{"query": "determined set provided", "relevant_ids": ["platform.ios_ver"], "answerable": true, "kind": "answerable"}
+{"query": "parser implements getter key", "relevant_ids": ["configparser.ConverterMapping"], "answerable": true, "kind": "answerable"}
+{"query": "algorithm parallel deflation specify fastica", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "returncode exit process negative signals", "relevant_ids": ["subprocess.CompletedProcess"], "answerable": true, "kind": "answerable"}
+{"query": "concrete implementations getitem setitem delitem", "relevant_ids": ["collections.UserDict"], "answerable": true, "kind": "answerable"}
+{"query": "remaining arguments ints", "relevant_ids": ["datetime.time"], "answerable": true, "kind": "answerable"}
+{"query": "dataclass assert astuple built-in", "relevant_ids": ["dataclasses.astuple"], "answerable": true, "kind": "answerable"}
+{"query": "connection cannot last errors exceptiongroup", "relevant_ids": ["socket.create_connection"], "answerable": true, "kind": "answerable"}
+{"query": "buffering buffer io open", "relevant_ids": ["tempfile.TemporaryFile"], "answerable": true, "kind": "answerable"}
+{"query": "cache hits misses maxsize currsize", "relevant_ids": ["functools.lru_cache"], "answerable": true, "kind": "answerable"}
+{"query": "five forms six big-endian le", "relevant_ids": ["uuid.UUID"], "answerable": true, "kind": "answerable"}
+{"query": "supports opening files binary mode", "relevant_ids": ["gzip.GzipFile"], "answerable": true, "kind": "answerable"}
+{"query": "ignore regex warnings append filters", "relevant_ids": ["warnings.filterwarnings"], "answerable": true, "kind": "answerable"}
+{"query": "tars sun calculate chksum", "relevant_ids": ["tarfile.calc_chksums"], "answerable": true, "kind": "answerable"}
+{"query": "indexable plain unpack asdict", "relevant_ids": ["collections.namedtuple"], "answerable": true, "kind": "answerable"}
+{"query": "how does compound interest work on a mortgage", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "commands authenticate append imap literal", "relevant_ids": ["imaplib.IMAP4"], "answerable": true, "kind": "answerable"}
+{"query": "bytesio simple stream in-memory bytes", "relevant_ids": ["io"], "answerable": true, "kind": "answerable"}
+{"query": "repeated every feature split", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "clock seq czt quickly", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "collapse addresses network", "relevant_ids": ["ipaddress.collapse_addresses"], "answerable": true, "kind": "answerable"}
+{"query": "node getnode hardware", "relevant_ids": ["uuid.uuid1"], "answerable": true, "kind": "answerable"}
+{"query": "quote quotation mark double translated", "relevant_ids": ["html.escape"], "answerable": true, "kind": "answerable"}
+{"query": "speleotrove decarith wiki floating", "relevant_ids": ["decimal"], "answerable": true, "kind": "answerable"}
+{"query": "thread acquired legacy newer", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "who won the world cup in 2010", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "many users enjoy pathlib", "relevant_ids": ["zipfile.Path"], "answerable": true, "kind": "answerable"}
+{"query": "limit omitted extracted", "relevant_ids": ["traceback.extract_tb"], "answerable": true, "kind": "answerable"}
+{"query": "network host bits", "relevant_ids": ["ipaddress.ip_network"], "answerable": true, "kind": "answerable"}
+{"query": "empty matches included result", "relevant_ids": ["re.finditer"], "answerable": true, "kind": "answerable"}
+{"query": "how do I fold a fitted sheet", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "transforms generic behaviours depending upon", "relevant_ids": ["functools.singledispatch"], "answerable": true, "kind": "answerable"}
+{"query": "eps distance neighborhood", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "action argumentparser needed parse", "relevant_ids": ["argparse.BooleanOptionalAction"], "answerable": true, "kind": "answerable"}
+{"query": "threshold less operations sparse matrices", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "logging channel assigns gave", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "exitstack enter fname attempts later", "relevant_ids": ["contextlib.ExitStack"], "answerable": true, "kind": "answerable"}
+{"query": "threads wait simultaneously awoken made", "relevant_ids": ["threading.Barrier"], "answerable": true, "kind": "answerable"}
+{"query": "processes resamples batch", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "tabs expanded image ndarray", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "example field tm year actual", "relevant_ids": ["time.struct_time"], "answerable": true, "kind": "answerable"}
+{"query": "python bytes hold representing struct", "relevant_ids": ["struct"], "answerable": true, "kind": "answerable"}
+{"query": "examples junk hello false", "relevant_ids": ["difflib.IS_LINE_JUNK"], "answerable": true, "kind": "answerable"}
+{"query": "size single generated returned", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "capturing groups present tuples group", "relevant_ids": ["re.findall"], "answerable": true, "kind": "answerable"}
+{"query": "low pass filter performed", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "reuse port image ndarray", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "bins array-like features produce", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "discarded longer strong reference", "relevant_ids": ["weakref.WeakKeyDictionary"], "answerable": true, "kind": "answerable"}
+{"query": "matches greedy repetitions preceding re", "relevant_ids": ["re"], "answerable": true, "kind": "answerable"}
+{"query": "lock argument parameter ignored", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "emitted runtime deprecated", "relevant_ids": ["warnings.deprecated"], "answerable": true, "kind": "answerable"}
+{"query": "akima continuously differentiable sub-spline", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "prompt written ask", "relevant_ids": ["getpass.unix_getpass"], "answerable": true, "kind": "answerable"}
+{"query": "extension guessed type none returned", "relevant_ids": ["mimetypes.guess_all_extensions"], "answerable": true, "kind": "answerable"}
+{"query": "remaining treated parameters system", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "defines useful matrix dimensions", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "numerator defaults denominator fraction", "relevant_ids": ["fractions.Fraction"], "answerable": true, "kind": "answerable"}
+{"query": "behavior mkdtemp used context manager", "relevant_ids": ["tempfile.TemporaryDirectory"], "answerable": true, "kind": "answerable"}
+{"query": "commands authenticate format str", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "concatenate ordinary i-th interpolant", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "environment password database", "relevant_ids": ["getpass.getuser"], "answerable": true, "kind": "answerable"}
+{"query": "although formally subtle", "relevant_ids": ["csv"], "answerable": true, "kind": "answerable"}
+{"query": "how to tune a ukulele", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "return value format extract tb", "relevant_ids": ["traceback.extract_stack"], "answerable": true, "kind": "answerable"}
+{"query": "pepper connect bright cracks", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "operator add expression", "relevant_ids": ["operator"], "answerable": true, "kind": "answerable"}
+{"query": "best hiking trails near Banff", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "values determined domain array", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "spearman proportion validation policy", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "args obj either network address", "relevant_ids": ["ipaddress.get_mixed_type_key"], "answerable": true, "kind": "answerable"}
+{"query": "rtol relative tolerance defaults eps", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "unicodedata txt publicly ftp", "relevant_ids": ["unicodedata"], "answerable": true, "kind": "answerable"}
+{"query": "defaultdict compares items", "relevant_ids": ["collections.defaultdict"], "answerable": true, "kind": "answerable"}
+{"query": "method docstrings versionadded ref", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "asyncexitstack connections await enter", "relevant_ids": ["contextlib.AsyncExitStack"], "answerable": true, "kind": "answerable"}
+{"query": "last batch image ndarray", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "unknown subtype content-type", "relevant_ids": ["mimetypes.guess_type"], "answerable": true, "kind": "answerable"}
+{"query": "maxsplit nonzero splits occur remainder", "relevant_ids": ["re.split"], "answerable": true, "kind": "answerable"}
+{"query": "functions specific socket available methods", "relevant_ids": ["socket"], "answerable": true, "kind": "answerable"}
+{"query": "merge applies window array", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "key computing group category element", "relevant_ids": ["itertools.groupby"], "answerable": true, "kind": "answerable"}
+{"query": "last assumed sorted either", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "associate owned expand cube", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "coef laguerre degree", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "five forms plotting curves", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "calls ignored closed", "relevant_ids": ["io.IOBase"], "answerable": true, "kind": "answerable"}
+{"query": "interpreting recall measure", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "path-like specifying searching", "relevant_ids": ["glob.iglob"], "answerable": true, "kind": "answerable"}
+{"query": "hyper-parameter gamma prior", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "symbolic link e- hyper-parameter", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "threads notified fresh unpredictable", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "cheap flights to Lisbon in March", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "construct representing covariance decompositions calculations", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "textwrapper customize wrapping behaviour", "relevant_ids": ["textwrap.fill"], "answerable": true, "kind": "answerable"}
+{"query": "employee collections inspect", "relevant_ids": ["typing.NamedTuple"], "answerable": true, "kind": "answerable"}
+{"query": "copied copy deepcopy", "relevant_ids": ["dataclasses.asdict"], "answerable": true, "kind": "answerable"}
+{"query": "versionadded guide latentdirichletallocation", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "ways bsr blocksize", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "extensively tested transactions machine", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "thread acquired setting low", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "integer another coef chebyshev", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "currentmodule interpolate sub-package interpolation", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "directly consumable python must consume", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "subscripted union generic aliases", "relevant_ids": ["typing"], "answerable": true, "kind": "answerable"}
+{"query": "extensively tested existence", "relevant_ids": ["random"], "answerable": true, "kind": "answerable"}
+{"query": "ordereddict co varnames", "relevant_ids": ["inspect.Signature"], "answerable": true, "kind": "answerable"}
+{"query": "tips for sleeping on a long flight", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "statements point view static checkers", "relevant_ids": ["typing.Any"], "answerable": true, "kind": "answerable"}
+{"query": "ts segments instants interpolants", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "parameter value attribute set empty", "relevant_ids": ["inspect.Parameter"], "answerable": true, "kind": "answerable"}
+{"query": "source lines indexes", "relevant_ids": ["inspect.findsource"], "answerable": true, "kind": "answerable"}
+{"query": "read ref user guide birch", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "called prints platform concatenated stdout", "relevant_ids": ["platform"], "answerable": true, "kind": "answerable"}
+{"query": "thread acquired reentrant acquire blocking", "relevant_ids": ["threading.RLock"], "answerable": true, "kind": "answerable"}
+{"query": "finds greater region connected", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "setfirstweekday day week monday sunday", "relevant_ids": ["calendar"], "answerable": true, "kind": "answerable"}
+{"query": "interesting heap smallest", "relevant_ids": ["heapq"], "answerable": true, "kind": "answerable"}
+{"query": "lines concatenated printed exactly print", "relevant_ids": ["traceback.format_exception"], "answerable": true, "kind": "answerable"}
+{"query": "difference between baking soda and baking powder", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "poles gain dt", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "implements quasi-constant step explained", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "how many calories in an avocado", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "returns zero product inputs", "relevant_ids": ["statistics.geometric_mean"], "answerable": true, "kind": "answerable"}
+{"query": "tabs spaces treated hello thello", "relevant_ids": ["textwrap.dedent"], "answerable": true, "kind": "answerable"}
+{"query": "also func transferfunction", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "getpass prompt password echo turned", "relevant_ids": ["getpass"], "answerable": true, "kind": "answerable"}
+{"query": "what rhymes with orange", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "elem adding seven del sims", "relevant_ids": ["collections.Counter"], "answerable": true, "kind": "answerable"}
+{"query": "output farid edge map", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "passing selects full results", "relevant_ids": ["socket.getaddrinfo"], "answerable": true, "kind": "answerable"}
+{"query": "substitutions conform required syntax", "relevant_ids": ["configparser.InterpolationSyntaxError"], "answerable": true, "kind": "answerable"}
+{"query": "vrfy someone getreply somebody overhere", "relevant_ids": ["smtplib"], "answerable": true, "kind": "answerable"}
+{"query": "measure joint variability", "relevant_ids": ["statistics.covariance"], "answerable": true, "kind": "answerable"}
+{"query": "parameters image ndarray binary input", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "otherwise characters escaped json", "relevant_ids": ["json.dump"], "answerable": true, "kind": "answerable"}
+{"query": "use skimage morphology dilation instead", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "addition blockingioerror non-blocking ready counterparts", "relevant_ids": ["io.BufferedIOBase"], "answerable": true, "kind": "answerable"}
+{"query": "reentrant released akima makima", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "sep absent trailing join words", "relevant_ids": ["string.capwords"], "answerable": true, "kind": "answerable"}
+{"query": "exposes familiar marshal pickle modules", "relevant_ids": ["json"], "answerable": true, "kind": "answerable"}
+{"query": "xi x-coordinates yi y-coordinates", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "serialize equivalents infinity", "relevant_ids": ["json.dumps"], "answerable": true, "kind": "answerable"}
+{"query": "entries cannot mapped window", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "extension already known replace old", "relevant_ids": ["mimetypes.add_type"], "answerable": true, "kind": "answerable"}
+{"query": "interpreting det curve", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "consumed lazily fill", "relevant_ids": ["itertools.batched"], "answerable": true, "kind": "answerable"}
+{"query": "substitutions made symbol must", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "sep absent dtype data-type", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "restrict assuming isotropic", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "public accessed q-th row", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "newline delete automatically deleted", "relevant_ids": ["tempfile.NamedTemporaryFile"], "answerable": true, "kind": "answerable"}
+{"query": "def count firstval yield", "relevant_ids": ["itertools.count"], "answerable": true, "kind": "answerable"}
+{"query": "accepts io bytesio socketio", "relevant_ids": ["hashlib.file_digest"], "answerable": true, "kind": "answerable"}
+{"query": "interpolates between min max attributes", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "extrapolates polynomial pieces b-spline active", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "handlers optionally formatter records desired", "relevant_ids": ["logging.Handler"], "answerable": true, "kind": "answerable"}
+{"query": "timeit execute initially", "relevant_ids": ["timeit"], "answerable": true, "kind": "answerable"}
+{"query": "closing try fast binary", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "reformat paragraph columns", "relevant_ids": ["textwrap.wrap"], "answerable": true, "kind": "answerable"}
+{"query": "formatted truncated exceeded", "relevant_ids": ["traceback.TracebackException"], "answerable": true, "kind": "answerable"}
+{"query": "one may pass seedsequence instance", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "resembles cp src", "relevant_ids": ["shutil.copy2"], "answerable": true, "kind": "answerable"}
+{"query": "translate pattern regular", "relevant_ids": ["fnmatch"], "answerable": true, "kind": "answerable"}
+{"query": "tarfile getmember gettarinfo", "relevant_ids": ["tarfile.TarInfo"], "answerable": true, "kind": "answerable"}
+{"query": "tol e- tolerance numerical", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "expand tabs spaces processing", "relevant_ids": ["textwrap.TextWrapper"], "answerable": true, "kind": "answerable"}
+{"query": "subclassed devising pos label", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "channel indicates area application", "relevant_ids": ["logging.Logger"], "answerable": true, "kind": "answerable"}
+{"query": "linkage architecture executable", "relevant_ids": ["platform.architecture"], "answerable": true, "kind": "answerable"}
+{"query": "shallow deep compound", "relevant_ids": ["copy"], "answerable": true, "kind": "answerable"}
+{"query": "hashlib constructor returning hash", "relevant_ids": ["hmac.digest"], "answerable": true, "kind": "answerable"}
+{"query": "domain array like optional", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "recognize implement fftfreq fftpack", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "passing zero cubicspline kroghinterpolator", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "os sep altsep", "relevant_ids": ["glob.translate"], "answerable": true, "kind": "answerable"}
+{"query": "opening removes surface", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "area closing removes dark surface", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "thread acquired n-i m-j", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "how to start a vegetable garden in clay soil", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "stats statistical tests quasi-monte carlo", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "dualstack af inet accept", "relevant_ids": ["socket.create_server"], "answerable": true, "kind": "answerable"}
+{"query": "extension already math frac", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "overload def consequently area", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "predicate prefix added", "relevant_ids": ["textwrap.indent"], "answerable": true, "kind": "answerable"}
+{"query": "compress data level compression", "relevant_ids": ["zlib"], "answerable": true, "kind": "answerable"}
+{"query": "more-blurred subtracted less-blurred", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "tm year versionadded ref", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "executes therefore subsets drawn", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "returns ipv address", "relevant_ids": ["ipaddress.ip_address"], "answerable": true, "kind": "answerable"}
+{"query": "warning used directly", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "tuning knownfiles symbol independent", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "guaranteed associated memory efficient", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "complexity enabling memmap", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "shell-style wildcards fnmatch", "relevant_ids": ["glob.glob"], "answerable": true, "kind": "answerable"}
+{"query": "contents owner group unaffected", "relevant_ids": ["shutil.copystat"], "answerable": true, "kind": "answerable"}
+{"query": "weighting required proper", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "code encoding otherwise subcluster", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "encapsulates co tb friendlier fashion", "relevant_ids": ["inspect"], "answerable": true, "kind": "answerable"}
+{"query": "fetch agen fresh unpredictable", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "symlinks aren followed src", "relevant_ids": ["shutil.copymode"], "answerable": true, "kind": "answerable"}
+{"query": "finalizer called evaluates arg kwargs", "relevant_ids": ["weakref.finalize"], "answerable": true, "kind": "answerable"}
+{"query": "mode write exclusive append", "relevant_ids": ["zipfile.ZipFile"], "answerable": true, "kind": "answerable"}
+{"query": "kwargs dict keyword", "relevant_ids": ["inspect.BoundArguments"], "answerable": true, "kind": "answerable"}
+{"query": "entries cannot determined", "relevant_ids": ["platform.mac_ver"], "answerable": true, "kind": "answerable"}
+{"query": "recipe for gluten free banana bread", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "alpha constant multip", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "error specify factory", "relevant_ids": ["dataclasses.field"], "answerable": true, "kind": "answerable"}
+{"query": "group uid much memory", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "versionadded ndarray samples", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "repetitions creation parsers", "relevant_ids": ["configparser.DuplicateSectionError"], "answerable": true, "kind": "answerable"}
+{"query": "clusters form well centroids generate", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "interval-censored observation lies", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "mt philox sfc getting", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "guidance interpreting plots refer roc", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "class accepts one parameterization math", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "decode stdin stdout stderr", "relevant_ids": ["subprocess.Popen"], "answerable": true, "kind": "answerable"}
+{"query": "iterative procedures evidence maximization", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "remaining arguments ints", "relevant_ids": ["datetime.datetime"], "answerable": true, "kind": "answerable"}
+{"query": "dropwhile keyfunc filterfalse islice", "relevant_ids": ["itertools"], "answerable": true, "kind": "answerable"}
+{"query": "prog auto-generated conflicts abbreviated unambiguously", "relevant_ids": ["argparse.ArgumentParser"], "answerable": true, "kind": "answerable"}
+{"query": "how to write a wedding toast", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "src symbolic like shape", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "normalization fails original unchanged", "relevant_ids": ["locale.normalize"], "answerable": true, "kind": "answerable"}
+{"query": "filter modules window array", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "exception message multivariate normal", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "remaining arguments must distance", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "feed update ask digest hexdigest", "relevant_ids": ["hmac.new"], "answerable": true, "kind": "answerable"}
+{"query": "raw top socket", "relevant_ids": ["socket.SocketIO"], "answerable": true, "kind": "answerable"}
+{"query": "instantiating posixpath passed transform", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "your instantiating posixpath windowspath", "relevant_ids": ["pathlib.Path"], "answerable": true, "kind": "answerable"}
+{"query": "readinto because character strings immutable", "relevant_ids": ["io.TextIOBase"], "answerable": true, "kind": "answerable"}
+{"query": "none set true", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "attrgetter first last call", "relevant_ids": ["operator.attrgetter"], "answerable": true, "kind": "answerable"}
+{"query": "documentation matrix spmatrix docs api", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "returning save byte pickling", "relevant_ids": ["pickle.encode_long"], "answerable": true, "kind": "answerable"}
+{"query": "esmtp ehlo command server supports", "relevant_ids": ["smtplib.SMTP"], "answerable": true, "kind": "answerable"}
+{"query": "md sha blake shake", "relevant_ids": ["hashlib"], "answerable": true, "kind": "answerable"}
+{"query": "unformatted compilation failed colno", "relevant_ids": ["re.PatternError"], "answerable": true, "kind": "answerable"}
+{"query": "labelencoder normalize labels", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "remaining treated typically introducing", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "floats positive negative", "relevant_ids": ["datetime.timedelta"], "answerable": true, "kind": "answerable"}
+{"query": "intimate libc symbols executables gcc", "relevant_ids": ["platform.libc_ver"], "answerable": true, "kind": "answerable"}
+{"query": "dataclass assert ndarray contain", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "dict-like remembers userdict userlist userstring", "relevant_ids": ["collections"], "answerable": true, "kind": "answerable"}
+{"query": "unformatted pos compilation failed colno", "relevant_ids": ["re.error"], "answerable": true, "kind": "answerable"}
+{"query": "vector-valued tanhsinh elementwise newton newton-cotes", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "generates bit generator hold lock", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "systems os urandom", "relevant_ids": ["random.SystemRandom"], "answerable": true, "kind": "answerable"}
+{"query": "condition threads notified thread", "relevant_ids": ["threading.Condition"], "answerable": true, "kind": "answerable"}
+{"query": "mtime set continuous-time differential", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "programmatically algebra-related prevent execution", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "origin of the word quarantine", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "localtime aware double-quoted", "relevant_ids": ["imaplib.Time2Internaldate"], "answerable": true, "kind": "answerable"}
+{"query": "lines confusing meth metric", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "how to repot a fiddle leaf fig", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "dialect identifies func identity", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "posix system instantiating purepath", "relevant_ids": ["pathlib.PurePosixPath"], "answerable": true, "kind": "answerable"}
+{"query": "sep absent forbidden accuracy", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "loggers handlers optionally records", "relevant_ids": ["logging.Filter"], "answerable": true, "kind": "answerable"}
+{"query": "block sparse formed blocks", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "reflect nearest mirror ndimage correlate", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "checks rough edges acceptabl", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "simplefilter immediately entering", "relevant_ids": ["warnings.catch_warnings"], "answerable": true, "kind": "answerable"}
+{"query": "eps e- means alpha", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "precise custom protocol", "relevant_ids": ["typing.IO"], "answerable": true, "kind": "answerable"}
+{"query": "returns file-like referred lowest", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "complex ratio points step", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "nbytes random bytes", "relevant_ids": ["secrets.token_urlsafe"], "answerable": true, "kind": "answerable"}
+{"query": "aclosing fetch agen await aclose", "relevant_ids": ["contextlib.aclosing"], "answerable": true, "kind": "answerable"}
+{"query": "supply bytes input return values", "relevant_ids": ["tempfile"], "answerable": true, "kind": "answerable"}
+{"query": "asyncexitstack connections domain array", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "ipv networks footprint ndarray", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "floats positive fftn discrete", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "dialect identifies shorttimefft p-th", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "pcg- bit neill permutation congruential", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "cx db programmatically algebra-related", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "fd descriptor root", "relevant_ids": ["shutil.chown"], "answerable": true, "kind": "answerable"}
+{"query": "first last dense batches", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "lookups search mappings successively", "relevant_ids": ["collections.ChainMap"], "answerable": true, "kind": "answerable"}
+{"query": "order returned whiten changed", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "how long should I roast a chicken", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "mkdtemp ignore b-spline basis", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "distancemetric pairwise distances", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "green red enumerations iterated know", "relevant_ids": ["enum.Enum"], "answerable": true, "kind": "answerable"}
+{"query": "efforts achieve available restart", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "closing block try finally", "relevant_ids": ["contextlib.closing"], "answerable": true, "kind": "answerable"}
+{"query": "table full dblquad tplquad", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "damping extent maintained incoming", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "code stored validation policy", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "cached must scalar options", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "logrecord levelno debug critical", "relevant_ids": ["logging.Formatter"], "answerable": true, "kind": "answerable"}
+{"query": "attempt made int optional", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "ndarray classes dtype matplotli", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "notion junk-free subsequence", "relevant_ids": ["difflib.SequenceMatcher"], "answerable": true, "kind": "answerable"}
+{"query": "provided considered detail", "relevant_ids": ["argparse.ArgumentDefaultsHelpFormatter"], "answerable": true, "kind": "answerable"}
+{"query": "message contains openings thus", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "aliasing engine maps lib", "relevant_ids": ["locale"], "answerable": true, "kind": "answerable"}
+{"query": "rules invalid references entities", "relevant_ids": ["html.unescape"], "answerable": true, "kind": "answerable"}
+{"query": "integer another decimal", "relevant_ids": ["decimal.Decimal"], "answerable": true, "kind": "answerable"}
+{"query": "quote quotation footprint ndarray", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "measures strength monotonic relationship", "relevant_ids": ["statistics.correlation"], "answerable": true, "kind": "answerable"}
+{"query": "mtime set modification time", "relevant_ids": ["gzip.compress"], "answerable": true, "kind": "answerable"}
+{"query": "exitstack enter meth fit", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "generation table generates scripts diff", "relevant_ids": ["difflib.HtmlDiff"], "answerable": true, "kind": "answerable"}
+{"query": "can dogs eat grapes", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "item framesummary onehot-dense transformed", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "items whose continuous- discrete-time", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "format str sparse result csr", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "text first whitespace collapsed", "relevant_ids": ["textwrap.shorten"], "answerable": true, "kind": "answerable"}
+{"query": "exitstack enter n-i m-j", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "examples character junk true false", "relevant_ids": ["difflib.IS_CHARACTER_JUNK"], "answerable": true, "kind": "answerable"}
+{"query": "how to negotiate a rent increase", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "cannot determined defaults", "relevant_ids": ["platform.java_ver"], "answerable": true, "kind": "answerable"}
+{"query": "asyncexitstack connections domain array", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "ls dev crw-rw-rw- oct internally", "relevant_ids": ["subprocess.check_output"], "answerable": true, "kind": "answerable"}
+{"query": "example retcode call ls", "relevant_ids": ["subprocess.call"], "answerable": true, "kind": "answerable"}
+{"query": "maintain compatibility lang tested envvars", "relevant_ids": ["locale.getdefaultlocale"], "answerable": true, "kind": "answerable"}
+{"query": "attrgetter first array-api interoperability", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "best way to learn to swim as an adult", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "why is the sky blue at noon", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "name file migration spmatrix", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "ignore warnings append filters", "relevant_ids": ["warnings.simplefilter"], "answerable": true, "kind": "answerable"}
+{"query": "labelbinarizer process easy", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "semaphores manage minus acquire plus", "relevant_ids": ["threading.Semaphore"], "answerable": true, "kind": "answerable"}
+{"query": "however also instantiate directly system", "relevant_ids": ["pathlib.PureWindowsPath"], "answerable": true, "kind": "answerable"}
+{"query": "sqlite transient sql query iterate", "relevant_ids": ["sqlite3"], "answerable": true, "kind": "answerable"}
+{"query": "multiplication operator dot", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "hardware fail ref user", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "subsets drawn pasting", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "suppose car damping extent", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "filename argument may file file-like", "relevant_ids": ["zipfile.is_zipfile"], "answerable": true, "kind": "answerable"}
+{"query": "callback keyedref releases expect", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "digest either n-th applicable", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "copyreg mechanism registering picklers", "relevant_ids": ["pickle"], "answerable": true, "kind": "answerable"}
+{"query": "msg combined record", "relevant_ids": ["logging.LogRecord"], "answerable": true, "kind": "answerable"}
+{"query": "available restart drop columns", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "distinguish different gauss spline", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "accepts timer unit testing", "relevant_ids": ["timeit.main"], "answerable": true, "kind": "answerable"}
+{"query": "defines guess url mime", "relevant_ids": ["mimetypes"], "answerable": true, "kind": "answerable"}
+{"query": "otherwise escaped design full", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "prog basename bins array-like", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "note block preferred bmat", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "hex bf ce cd df", "relevant_ids": ["secrets.token_hex"], "answerable": true, "kind": "answerable"}
+{"query": "symbolic symlink copying", "relevant_ids": ["shutil.copyfile"], "answerable": true, "kind": "answerable"}
+{"query": "htmldiff producing html side highlights", "relevant_ids": ["difflib"], "answerable": true, "kind": "answerable"}
+{"query": "especially useful frozen", "relevant_ids": ["dataclasses.replace"], "answerable": true, "kind": "answerable"}
+{"query": "launch quite slow", "relevant_ids": ["uuid.getnode"], "answerable": true, "kind": "answerable"}
+{"query": "setfirstweekday week damp proceed", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "lookups search damping extent", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "category may given one lc", "relevant_ids": ["locale.setlocale"], "answerable": true, "kind": "answerable"}
+{"query": "calledprocesserror object code returncode attribute", "relevant_ids": ["subprocess.check_call"], "answerable": true, "kind": "answerable"}
+{"query": "dest command-line consumed", "relevant_ids": ["argparse.Action"], "answerable": true, "kind": "answerable"}
+{"query": "quantify change spectrum", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "how deep is the Mariana trench", "relevant_ids": [], "answerable": false, "kind": "off_topic"}
+{"query": "error code stored smtp message", "relevant_ids": ["smtplib.SMTPResponseException"], "answerable": true, "kind": "answerable"}
+{"query": "translate tuples interpolates min", "relevant_ids": [], "answerable": false, "kind": "hybrid"}
+{"query": "pixel origin radius", "relevant_ids": [], "answerable": false, "kind": "foreign"}
+{"query": "present lines beginning", "relevant_ids": ["difflib.Differ"], "answerable": true, "kind": "answerable"}

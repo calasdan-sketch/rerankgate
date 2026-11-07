@@ -123,6 +123,9 @@ class SufficiencyGate:
             + cfg.w_support * features.support
         )
 
+        # Compare the same rounded number that is reported and calibrated on
+        # (conformal thresholds are exact only if score and test agree).
+        score = round(score, 4)
         passed = score >= cfg.threshold and not reasons
         if passed:
             reasons = [PASS]
@@ -137,7 +140,7 @@ class SufficiencyGate:
         explanation = " ".join(_EXPLANATIONS.get(r, r) for r in reasons)
         return GateDecision(
             passed=passed,
-            score=round(score, 4),
+            score=score,
             features=features,
             reasons=reasons,
             explanation=explanation,
@@ -180,6 +183,22 @@ class SufficiencyGate:
         return GateFeatures(
             top_score=norm_top, coverage=coverage, margin=margin, support=support, depth=depth
         )
+
+
+_FLOORS = (NO_EVIDENCE, INVALID_SCORE, LOW_TOP_SCORE, LOW_COVERAGE)
+
+
+def effective_score(decision: GateDecision) -> float:
+    """The number the pass/fail test really compares to the threshold.
+
+    A decision that tripped a hard floor can never pass whatever its weighted score
+    is, so its effective score is -1.0. Otherwise it is the weighted score. Thresholds
+    (hand-set or conformal) are therefore thresholds on THIS value: pass iff
+    ``effective_score >= threshold``.
+    """
+    if any(r in _FLOORS for r in decision.reasons):
+        return -1.0
+    return float(decision.score)
 
 
 def _finite(x: object) -> bool:

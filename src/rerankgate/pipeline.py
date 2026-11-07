@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import math
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -12,9 +14,10 @@ from rerankgate.bm25 import BM25Index
 from rerankgate.config import PipelineConfig
 from rerankgate.documents import Chunk, Document, chunk_text
 from rerankgate.embeddings import EmbeddingBackend, SentenceTransformerBackend
-from rerankgate.gate import GateDecision, SufficiencyGate
+from rerankgate.gate import GateDecision, SufficiencyGate, effective_score
 from rerankgate.judge import FaithfulnessReport, HeuristicJudge, Judge
 from rerankgate.metrics import EvalItem, aggregate
+from rerankgate.monitor import GateMonitor
 from rerankgate.rerank import FeatureReranker, Reranker
 from rerankgate.retrieval import HybridRetriever, RetrievalResult, ScoredChunk
 from rerankgate.rewrite import RM3Rewriter
@@ -26,6 +29,58 @@ INSUFFICIENT = "insufficient"
 NEEDS_REVIEW = "needs_review"
 
 Verdict = Literal[ANSWERABLE, INSUFFICIENT, NEEDS_REVIEW]  # type: ignore[valid-type]
+
+
+@dataclass
+class ConformalResult:
+    """Outcome of ``RAGPipeline.conformal_gate``."""
+
+    alpha: float
+    delta: float | None
+    n_unanswerable: int
+    tau: float | None  # None = +inf (cannot guarantee: gate never passes)
+    threshold: float  # value for GateConfig.threshold
+    achievable: bool
+    min_unanswerable_needed: int
+    calibration_far: float
+    far_ci95: tuple[float, float]
+    answerable_recall: float | None  # optimistic: measured on the calibration items
+
+    @property
+    def guarantee(self) -> str:
+        if not self.achievable:
+            return (
+                f"NONE: {self.n_unanswerable} unanswerable calibration queries is below the "
+                f"{self.min_unanswerable_needed} needed for alpha={self.alpha}"
+                + (f", delta={self.delta}" if self.delta is not None else "")
+                + "; the gate was set to never pass"
+            )
+        if self.delta is None:
+            return (
+                f"expected false-answer rate <= {self.alpha} on unanswerable "
+                "queries like the calibration set"
+            )
+        return (
+            f"with probability >= {1 - self.delta:g} over the calibration draw, false-answer "
+            f"rate <= {self.alpha} on unanswerable queries like the calibration set"
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "alpha": self.alpha,
+            "delta": self.delta,
+            "n_unanswerable": self.n_unanswerable,
+            "tau": self.tau,
+            "threshold": self.threshold,
+            "achievable": self.achievable,
+            "min_unanswerable_needed": self.min_unanswerable_needed,
+            "calibration_far": round(self.calibration_far, 4),
+            "far_ci95": [round(x, 4) for x in self.far_ci95],
+            "answerable_recall_on_calibration": (
+                None if self.answerable_recall is None else round(self.answerable_recall, 4)
+            ),
+            "guarantee": self.guarantee,
+        }
 
 
 @dataclass
@@ -102,6 +157,7 @@ class RAGPipeline:
         self.gate = SufficiencyGate(self.config.effective_gate())
         self.rewriter = RM3Rewriter(expansion_terms=self.config.retry.expansion_terms)
         self.faithfulness_floor = 0.35
+        self.monitor: GateMonitor | None = None  # optional drift monitor (see monitor.py)
 
         self.embeddings: EmbeddingBackend | None = None
         self.vector_store: VectorStore | None = None
@@ -238,13 +294,18 @@ class RAGPipeline:
         t0 = perf_counter()
         cfg = self.config
         attempts: list[AttemptRecord] = []
-        best: tuple[float, list[ScoredChunk], GateDecision, str] | None = None
+        best: tuple[tuple[bool, float], list[ScoredChunk], GateDecision, str] | None = None
+        eff_max = -1.0
         current_query = query
 
         for attempt in range(cfg.retry.max_retries + 1):
             retrieval = self._retriever().retrieve(current_query, k=cfg.retrieve_k)
-            reranked = self.reranker.rerank(current_query, retrieval.chunks, k=cfg.rerank_k)
-            decision = self.gate.evaluate(current_query, reranked)
+            # Expansion only widens the candidate pool. Rerank and gate against the
+            # ORIGINAL query: the expansion terms come from the evidence itself, so
+            # judging sufficiency on the expanded query is circular (it made
+            # off-topic queries pass after a retry).
+            reranked = self.reranker.rerank(query, retrieval.chunks, k=cfg.rerank_k)
+            decision = self.gate.evaluate(query, reranked)
             attempts.append(
                 AttemptRecord(
                     query=current_query,
@@ -253,9 +314,13 @@ class RAGPipeline:
                     evidence_ids=[c.chunk.id for c in reranked],
                 )
             )
-            prev_best = best[0] if best is not None else -1.0
-            if best is None or decision.score > best[0]:
-                best = (decision.score, reranked, decision, current_query)
+            prev_best = best[0][1] if best is not None else -1.0
+            eff_max = max(eff_max, effective_score(decision))
+            key = (decision.passed, decision.score)
+            if best is None or key > best[0]:
+                # a passing attempt always beats a failing one, even a higher-scored
+                # failure (one that tripped a hard floor)
+                best = (key, reranked, decision, current_query)
             if decision.passed:
                 break
             # Diminishing-returns early stop: don't burn retries going nowhere.
@@ -294,10 +359,11 @@ class RAGPipeline:
             "reranker": self.reranker.name,
             "judge": self.judge.name,
             "gate_overridden": overridden,
+            "gate_score": eff_max,
             "total_ms": total_ms,
             "chunk_count": len(self.chunks),
         }
-        return AnswerResult(
+        result = AnswerResult(
             verdict=verdict,
             query=query,
             evidence=evidence,
@@ -307,6 +373,9 @@ class RAGPipeline:
             faithfulness=faithfulness,
             trace=trace,
         )
+        if self.monitor is not None:
+            self.monitor.record(answered=decision.passed, score=eff_max, latency_ms=total_ms)
+        return result
 
     def evaluate(self, items: list[EvalItem]) -> dict:
         """Run the eval harness: retrieval metrics + gate confusion matrix."""
@@ -398,3 +467,79 @@ class RAGPipeline:
             "recommended_threshold": best["threshold"] if best else None,
             "sweep": rows,
         }
+
+    # -- conformal calibration ----------------------------------------
+    def score_results(self, queries: list[str]) -> list[AnswerResult]:
+        """Run `ask()` with a gate that never passes early, so each result's
+        ``trace["gate_score"]`` is the threshold-free best effective score over the retry
+        attempts. One calibrated threshold then applies to the exact deployed rule."""
+        original, monitor = self.gate, self.monitor
+        base = self.config.effective_gate()
+        huge = base.w_top_score + base.w_coverage + base.w_margin + base.w_support + 1.0
+        self.gate = SufficiencyGate(dataclasses.replace(base, threshold=huge))
+        self.monitor = None
+        try:
+            return [self.ask(q) for q in queries]
+        finally:
+            self.gate, self.monitor = original, monitor
+
+    def gate_scores(self, queries: list[str]) -> list[float]:
+        return [float(r.trace["gate_score"]) for r in self.score_results(queries)]
+
+    def conformal_gate(
+        self,
+        items: list[EvalItem],
+        alpha: float = 0.05,
+        delta: float | None = None,
+        apply: bool = True,
+    ) -> ConformalResult:
+        """Pick the gate threshold with a finite-sample false-answer-rate guarantee.
+
+        Uses the *unanswerable* items as calibration. ``delta=None``: expected
+        false-answer rate <= alpha (split conformal). ``delta=0.05``: with 95%
+        probability over the calibration draw, false-answer rate <= alpha. If there
+        are too few unanswerable items the result says ``achievable=False`` and
+        (with ``apply``) the gate is set to never pass. Recall on answerable items
+        is measured on the same items, so treat it as optimistic; hold out a test
+        split to report it (benchmarks/bench_gate.py does).
+        """
+        from rerankgate import calibration as cal
+
+        if not items:
+            raise ValueError("conformal_gate() needs labeled items")
+        neg = [it.query for it in items if not it.answerable]
+        pos = [it.query for it in items if it.answerable]
+        if not neg:
+            raise ValueError("conformal_gate() needs unanswerable items to calibrate on")
+        neg_s = self.gate_scores(neg)
+        pos_s = self.gate_scores(pos) if pos else []
+        tau = (
+            cal.conformal_threshold(neg_s, alpha)
+            if delta is None
+            else cal.pac_threshold(neg_s, alpha, delta)
+        )
+        base = self.config.effective_gate()
+        cap = base.w_top_score + base.w_coverage + base.w_margin + base.w_support + 1.0
+        achievable = math.isfinite(tau) or tau == -math.inf
+        if tau == math.inf:
+            threshold = cap  # nothing can reach it: fail closed
+        elif tau == -math.inf or tau < 0:
+            threshold = 1e-9  # only the hard floors apply
+        else:
+            threshold = cal.nudge_up(tau)
+        need = cal.min_negatives(alpha, delta)
+        res = ConformalResult(
+            alpha=alpha,
+            delta=delta,
+            n_unanswerable=len(neg_s),
+            tau=tau if math.isfinite(tau) else None,
+            threshold=threshold,
+            achievable=achievable,
+            min_unanswerable_needed=need,
+            calibration_far=cal.far_at(neg_s, tau),
+            answerable_recall=cal.recall_at(pos_s, tau) if pos_s else None,
+            far_ci95=cal.wilson_interval(sum(1 for s in neg_s if s > tau), len(neg_s)),
+        )
+        if apply:
+            self.gate = SufficiencyGate(dataclasses.replace(base, threshold=threshold))
+        return res

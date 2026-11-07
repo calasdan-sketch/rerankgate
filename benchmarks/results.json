@@ -1,0 +1,54 @@
+{
+  "dataset": {
+    "corpus_docs": 246,
+    "queries": 440,
+    "answerable": 217,
+    "unanswerable": 223
+  },
+  "alpha": 0.05,
+  "delta": 0.1,
+  "splits": 200,
+  "aurc": {
+    "gate_score": 0.1714,
+    "raw_top1_bm25": 0.1732,
+    "oracle": 0.1604,
+    "no_gate": 0.5091
+  },
+  "methods": {
+    "cutoff-F1": {
+      "far_mean": 0.0864,
+      "splits_far_above_alpha": 0.765,
+      "answerable_recall": 0.9038,
+      "answer_precision": 0.9123,
+      "coverage": 0.4881
+    },
+    "heuristic": {
+      "far_mean": 0.1315,
+      "splits_far_above_alpha": 1.0,
+      "answerable_recall": 0.9915,
+      "answer_precision": 0.8745,
+      "coverage": 0.5541
+    },
+    "conformal": {
+      "far_mean": 0.0436,
+      "splits_far_above_alpha": 0.395,
+      "answerable_recall": 0.9787,
+      "answer_precision": 0.9511,
+      "coverage": 0.5031
+    },
+    "conformal-PAC": {
+      "far_mean": 0.0252,
+      "splits_far_above_alpha": 0.115,
+      "answerable_recall": 0.9314,
+      "answer_precision": 0.9687,
+      "coverage": 0.4708
+    },
+    "ScoreGate": {
+      "far_mean": 0.0351,
+      "splits_far_above_alpha": 0.24,
+      "answerable_recall": 0.7863,
+      "answer_precision": 0.96,
+      "coverage": 0.4043
+    }
+  }
+}

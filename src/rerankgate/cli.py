@@ -1,4 +1,4 @@
-"""rerankgate CLI: ingest | query | eval | calibrate.
+"""rerankgate CLI: ingest | query | eval | calibrate | conformal | riskcov.
 
 Exit codes: 0 ok · 1 a quality check failed (``--fail-on-insufficient``,
 ``--fail-under-*``) · 2 bad input or setup (unreadable/empty file, corrupt store).
@@ -48,6 +48,23 @@ def _read_jsonl(path: str, what: str) -> Iterator[tuple[int, dict]]:
             raise InputError(f"{what} is not valid UTF-8: {exc}") from exc
 
 
+def _threshold_from_file(path: str) -> float:
+    """Read a threshold written by `rerankgate conformal --out`; fail closed on anything odd."""
+    import math
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            obj = json.load(f)
+    except OSError as exc:
+        raise InputError(f"cannot open gate file {path!r}: {exc.strerror or exc}") from exc
+    except ValueError as exc:
+        raise InputError(f"gate file {path!r} is not valid JSON") from exc
+    v = obj.get("threshold") if isinstance(obj, dict) else None
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
+        raise InputError(f"gate file {path!r} has no finite positive 'threshold'")
+    return float(v)
+
+
 def _pipeline_for(args: argparse.Namespace, *, for_ingest: bool = False) -> RAGPipeline:
     cfg = PipelineConfig()
     if args.gate_preset:
@@ -58,6 +75,9 @@ def _pipeline_for(args: argparse.Namespace, *, for_ingest: bool = False) -> RAGP
         cfg.retry.max_retries = args.max_retries
     if args.no_vectors:
         cfg.use_vectors = False
+    if getattr(args, "gate_file", None):
+        cfg.gate.threshold = _threshold_from_file(args.gate_file)
+        cfg.gate_preset = None  # a calibrated threshold beats a preset
     if for_ingest:
         return RAGPipeline(config=cfg)
     return RAGPipeline.load(args.store, config=cfg)
@@ -187,6 +207,55 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return EXIT_OK if report["recommended_threshold"] is not None else EXIT_CHECK_FAILED
 
 
+def cmd_conformal(args: argparse.Namespace) -> int:
+    items = _load_items(args.qrels)
+    pipe = _pipeline_for(args)
+    try:
+        res = pipe.conformal_gate(items, alpha=args.alpha, delta=args.delta, apply=False)
+    except ValueError as exc:
+        raise InputError(str(exc)) from exc
+    out = res.to_dict()
+    print(json.dumps(out, indent=2))
+    if args.out:
+        try:
+            with open(args.out, "w", encoding="utf-8") as f:
+                json.dump({"threshold": res.threshold, "calibration": out}, f, indent=2)
+        except OSError as exc:
+            raise InputError(f"cannot write {args.out!r}: {exc.strerror or exc}") from exc
+    if not res.achievable:
+        print("FAILED: " + res.guarantee, file=sys.stderr)
+        return EXIT_CHECK_FAILED
+    return EXIT_OK
+
+
+def cmd_riskcov(args: argparse.Namespace) -> int:
+    from rerankgate.selective import aurc, oracle_aurc, risk_at_coverage
+
+    items = _load_items(args.qrels)
+    pipe = _pipeline_for(args)
+    results = pipe.score_results([it.query for it in items])
+    scores = [float(r.trace["gate_score"]) for r in results]
+    correct = [
+        it.answerable
+        and any(
+            c.chunk.doc_id in set(it.relevant_ids) or c.chunk.id in set(it.relevant_ids)
+            for c in r.evidence[:3]
+        )
+        for it, r in zip(items, results, strict=True)
+    ]
+    rep = {
+        "n": len(items),
+        "aurc": round(aurc(scores, correct), 4),
+        "aurc_oracle": round(oracle_aurc(correct), 4),
+        "aurc_no_gate": round(1 - sum(correct) / len(correct), 4),
+        "risk_at_coverage": {
+            str(c): round(risk_at_coverage(scores, correct, c), 4) for c in (0.25, 0.5, 0.75, 1.0)
+        },
+    }
+    print(json.dumps(rep, indent=2))
+    return EXIT_OK
+
+
 def _fraction(value: str) -> float:
     try:
         v = float(value)
@@ -194,6 +263,13 @@ def _fraction(value: str) -> float:
         raise argparse.ArgumentTypeError(f"{value!r} is not a number") from exc
     if not 0.0 <= v <= 1.0:
         raise argparse.ArgumentTypeError(f"{value} must be between 0 and 1")
+    return v
+
+
+def _open_fraction(value: str) -> float:
+    v = _fraction(value)
+    if not 0.0 < v < 1.0:
+        raise argparse.ArgumentTypeError(f"{value} must be strictly between 0 and 1")
     return v
 
 
@@ -208,6 +284,12 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--gate-preset", choices=["strict", "balanced", "lenient"], default=None)
         sp.add_argument("--max-retries", type=int, default=None)
         sp.add_argument("--no-vectors", action="store_true", help="force BM25-only mode")
+        sp.add_argument(
+            "--gate-file",
+            default=None,
+            metavar="FILE",
+            help="use the threshold from a file written by `rerankgate conformal --out`",
+        )
 
     pi = sub.add_parser("ingest", help="ingest a JSONL corpus into a store")
     pi.add_argument("--input", required=True, help="JSONL with {id, text, ...metadata}")
@@ -254,6 +336,29 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument("--json", action="store_true")
     _common(pc)
     pc.set_defaults(func=cmd_calibrate)
+
+    pf = sub.add_parser(
+        "conformal",
+        help="pick the gate threshold with a finite-sample false-answer-rate guarantee",
+    )
+    pf.add_argument("--store", required=True)
+    pf.add_argument("--qrels", required=True, help="JSONL with {query, relevant_ids, answerable}")
+    pf.add_argument("--alpha", type=_open_fraction, default=0.05, help="max false-answer rate")
+    pf.add_argument(
+        "--delta",
+        type=_open_fraction,
+        default=None,
+        help="if set: guarantee holds with probability 1-delta over the calibration draw",
+    )
+    pf.add_argument("--out", default=None, help="write {threshold, calibration} JSON here")
+    _common(pf)
+    pf.set_defaults(func=cmd_conformal)
+
+    pr = sub.add_parser("riskcov", help="risk-coverage AUC of the gate score on labeled qrels")
+    pr.add_argument("--store", required=True)
+    pr.add_argument("--qrels", required=True)
+    _common(pr)
+    pr.set_defaults(func=cmd_riskcov)
     return p
 
 

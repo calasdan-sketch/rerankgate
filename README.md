@@ -103,6 +103,70 @@ queries — it refuses to "calibrate" on one-sided data. From Python:
 `pipe.calibrate(items, target_precision=0.95)`; then set
 `PipelineConfig(gate=GateConfig(threshold=...))`.
 
+### Cap the false-answer rate with a guarantee (conformal)
+
+`calibrate` picks a threshold that looks good on your labels. `conformal` picks one
+that comes with a finite-sample bound, using only the *unanswerable* queries:
+
+```bash
+rerankgate conformal --store ./store --qrels eval.jsonl --alpha 0.05 --delta 0.1 --out gate.json
+rerankgate query --store ./store --gate-file gate.json "..."
+```
+
+Meaning: with probability >= 90% over the draw of your calibration set, at most 5% of
+*future unanswerable queries like the calibration ones* get an answer (`--delta` omitted:
+the 5% holds on average). You need at least 45 unanswerable queries for 5%/10% (59 for
+5%/5%); with fewer, the gate is set to **never pass** and the command exits 1 rather than
+claim a bound it cannot give. Python: `pipe.conformal_gate(items, alpha=0.05, delta=0.1)`.
+
+What it does not promise: anything about answerable queries (recall is measured, not
+guaranteed), anything after your traffic or corpus drifts (see the monitor below), or
+queries unlike the calibration set. The bound is verified by Monte Carlo in the tests.
+
+### Any retriever: `ScoreGate`
+
+Already have Cohere/BGE/Jina/ms-marco/Pinecone/pgvector scores? No pipeline needed:
+
+```python
+from rerankgate import ScoreGate
+gate = ScoreGate.fit(score_lists, answerable_flags, alpha=0.05)   # lists of raw scores per query
+d = gate.decide(scores_for_new_query)   # d.passed, d.p_value, d.reason
+open("gate.json", "w").write(gate.to_json())
+```
+
+`p_value` is the conformal p-value: how many known-unanswerable queries scored at least
+this high. Non-finite or empty scores abstain (`INVALID_SCORE` / `NO_EVIDENCE`). Pass
+`higher_is_better=False` for distances. `statistic="auto"` chooses between top score,
+gap to runner-up and a z-score on half your data and calibrates on the other half.
+
+### Watch for drift in production
+
+```python
+from rerankgate import GateMonitor, Baseline
+base = Baseline.from_events(scores, answered_flags)      # at calibration time
+pipe.monitor = GateMonitor(base, window=500, max_p95_latency_ms=200)
+...
+report = pipe.monitor.check()    # status ok | warming_up | alert, plus named alerts
+```
+
+Alerts: `ABSTAIN_RATE_SHIFT` (two-proportion z-test), `SCORE_DRIFT` (PSI over baseline
+deciles, >= 0.25, with KS distance), `LATENCY`, `INVALID_SCORES`. Thread-safe, stdlib only.
+Below `min_n` events it says `warming_up` instead of crying wolf.
+
+### What the user sees when it abstains
+
+```python
+from rerankgate import explain_abstention
+notice = explain_abstention(result)   # None if answered
+notice.kind     # no_match | partial | ambiguous | error
+notice.action   # search | clarify | retry_later
+notice.message  # plain sentence; never echoes evidence text
+notice.missing_terms, notice.matched_terms, notice.nearest_sources, notice.clarifying_question
+```
+
+No LLM involved; it is built from the user's own terms and your document ids/titles,
+all escaped for terminals.
+
 ### Use it as a CI check
 
 ```bash
@@ -163,6 +227,34 @@ Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
   (e.g. "7" on a 0–10 scale) scores 0. `calibrate` gives no recommendation
   (exit 1) when no threshold lets any answerable query through.
 
+## Benchmark: does the gate actually stop false answers?
+
+`python benchmarks/bench_gate.py` (committed data, ~10 s, no installs). 246 real
+docstring documents (Python standard library); 217 answerable queries and 223 unanswerable
+ones (foreign-domain numpy/scipy/sklearn text, everyday off-topic questions, and hybrids
+mixing both). **Labels are synthetic** (we know which document a query was drawn from), the
+retrieval is BM25-only, and the foreign-domain queries are easier than real user mistakes.
+Treat it as a regression benchmark and a demo of the guarantees, not as a leaderboard.
+Mean over 200 random 50/50 calibration/test splits; target alpha = 5%, delta = 10%:
+
+| Method | False-answer rate | Splits above 5% | Answerable recall | Answer precision |
+|---|---|---|---|---|
+| raw top-1 BM25 cutoff, tuned for F1 (what a "similarity cutoff" gives you) | 8.6% | 77% | 90.4% | 91.2% |
+| rerankgate default gate (0.55), no calibration | 13.2% | 100% | 99.2% | 87.5% |
+| rerankgate + `conformal` (alpha 0.05) | **4.4%** | 40% | 97.9% | 95.1% |
+| rerankgate + `conformal` (alpha 0.05, delta 0.10) | **2.5%** | **12%** | 93.1% | 96.9% |
+| `ScoreGate` on raw BM25 scores | 3.5% | 24% | 78.6% | 96.0% |
+
+Reading it: the default threshold lets through 13% of unanswerable queries; the conformal
+threshold brings the average under 5% (as promised) at a 1-point recall cost, and the
+high-probability variant exceeds 5% in about delta of splits (12% observed, 10% promised;
+200 overlapping splits of one finite dataset, so +-3 points of noise). Honest caveat: the
+gate score ranks answerable above unanswerable barely better than raw BM25 (risk-coverage
+AUC 0.171 vs 0.173; oracle 0.160, answering everything 0.509) - the step change is the
+*calibrated, bounded* decision, not a better ranking signal. Also found and fixed here:
+before 0.4 the query-rewrite retries inflated false answers from 27 to 119 of 223
+unanswerable queries, because the gate judged coverage against the expanded query.
+
 ## How it compares
 
 Statements below are limited to what each project documents; follow the links.
@@ -174,6 +266,8 @@ Statements below are limited to what each project documents; follow the links.
 | Ragas faithfulness ([docs](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/)) | No — offline evaluation metric | Yes (an HHEM classifier variant exists) | Evaluates answers after the fact |
 | DeepEval contextual relevancy ([docs](https://deepeval.com/docs/metrics-contextual-relevancy)) | No — evaluation metric | LLM judge by default; a non-LLM "system_one" mode exists | Default threshold 0.5 |
 | "Sufficient Context" (Google Research, [arXiv:2411.06037](https://arxiv.org/abs/2411.06037)) | Research method | Uses an LLM autorater | Reports selective generation raising the share of correct answers among those given by 2–10% |
+| LlamaIndex `SimilarityPostprocessor` ([source](https://github.com/run-llama/llama_index/blob/main/llama-index-core/llama_index/core/postprocessor/node.py)) | A fixed `similarity_cutoff` you choose (default 0.0 = keep everything) | None | Reading the source: a NaN score is *kept* (`nan < cutoff` is False). No calibration, no guarantee |
+| LangChain `similarity_score_threshold` search ([source](https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/vectorstores/base.py)) | A fixed `score_threshold` you choose | None | Scores differ per vector store/metric, so a copied cutoff does not transfer |
 | bm25s ([repo](https://github.com/xhluca/bm25s)) | No — lexical search only | — | Needs NumPy; author benchmarks show large speedups over rank-bm25 |
 | FlashRank ([repo](https://github.com/PrithivirajDamodaran/FlashRank)) | No — reranker only | — | No torch; ~4MB default cross-encoder; pluggable here as a `Reranker` |
 
@@ -220,8 +314,13 @@ it per query.
   tables and structured text chunk naively.
 - `pip install rerankgate[local]` pulls PyTorch (~2GB) via sentence-transformers —
   the price of local dense retrieval. BM25-only mode needs nothing.
-- The gate threshold defaults are starting points, not tuned constants — they
-  were sanity-checked on a toy corpus, not a benchmark. Calibrate on your data.
+- The gate threshold defaults are starting points, not tuned constants: on the
+  benchmark above the default 0.55 passed 13% of unanswerable queries. Use
+  `conformal` on your data. The bound needs enough unanswerable calibration queries,
+  assumes your traffic looks like them, and is not a statement about answer quality.
+- Not benchmarked here: dense/hybrid retrieval, cross-encoder rerankers, public
+  datasets (BEIR/MS MARCO) - no network-free copy was available. `ScoreGate` works on their
+  scores but the numbers above are BM25 only.
 - Not thread-safe; one pipeline per thread. Everything is in memory: the store
   is loaded whole, and the vector search is brute force (no ANN index). At
   500K+ vectors, prefer the numpy path (installed with `[local]`) or an external
