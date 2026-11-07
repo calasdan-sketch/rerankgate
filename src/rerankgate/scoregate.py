@@ -114,13 +114,15 @@ class ScoreGate:
             best = None
             for st in STATS:
                 vals = [statistic_value(score_lists[i], st, higher_is_better) for i in sel]
-                if any(v is None for v in vals) or not vals:
+                clean_vals = [v for v in vals if v is not None]
+                if len(clean_vals) != len(vals) or not vals:
                     continue
-                a = aurc(vals, [answerable[i] for i in sel])
+                a = aurc(clean_vals, [answerable[i] for i in sel])
                 if best is None or a < best[0] - 1e-12:
                     best = (a, st)
             stat = best[1] if best else "top1"
-        neg, pos = [], []
+        neg: list[float] = []
+        pos: list[float] = []
         for i in calib:
             v = statistic_value(score_lists[i], stat, higher_is_better)
             if v is None:

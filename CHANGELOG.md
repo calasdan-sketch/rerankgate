@@ -1,6 +1,45 @@
 # Changelog
 
-## 0.4.0 - unreleased (expert round 3)
+## 0.4.0 - unreleased (expert round 4, then rounds 3, 2 and the never-published 0.3.0 below)
+
+PyPI has only 0.2.0; 0.3.0 was never uploaded, so the next release is 0.4.0 and contains every
+section below. Not a breaking API change, but scores change (see "Changed" in the sections
+below): re-calibrate any threshold you tuned on 0.2.
+
+### Round 4: what a stranger who `pip install`s gets
+Added
+- `LICENSE` file (MIT, Calas Automations Inc.), shipped in the wheel and sdist. It was missing:
+  an MIT licence needs its notice to travel with the code.
+- `py.typed` (the package ships type hints; mypy now passes on `src`), `Typing :: Typed`,
+  Python 3.10-3.13 classifiers, project URLs (repository, issues, changelog), SPDX
+  `license = "MIT"` (build needs setuptools >= 77), `MANIFEST.in`.
+- `rerankgate info --store DIR`, `ingest --json`, `ingest --input -` (stdin), and a `notice`
+  block (what to tell the user) in `query --json` when the verdict is not `answerable`.
+- `.github/workflows/ci.yml`: Linux/Windows/macOS x Python 3.10/3.13 tests, lint, mypy, and a
+  build-install-run-quickstart job. Written but not yet run by anyone.
+- `docs/ROUND4.md` (findings, 24-idea scored list, what was not tested), `PUBLISH-CHECKLIST.md`.
+
+Fixed
+- A corpus saved by Windows Notepad (UTF-8 BOM) was rejected as "invalid JSON"; gate files too.
+- A non-UTF-8 console (Windows cp1252, C locale) crashed `query` with a traceback on any Greek,
+  CJK or accented evidence. Output now degrades to `\uXXXX` escapes.
+- A lone surrogate in a corpus (`"\ud800"`) crashed `ingest` with a traceback; now exit 2 with
+  the line number (and `StoreError` from the library).
+- `| head` printed `error: Broken pipe`; Ctrl-C printed a traceback. Now quiet (exit 141 / 130).
+- An empty query was answered `insufficient` (exit 0); the CLI now rejects it (exit 2).
+  `ask(None)` raises a clear `TypeError`.
+- The library's "BM25-only" warning printed on top of the CLI's own note; the CLI hides the
+  duplicate.
+- `conformal --out` truncated an existing good gate file before writing, and wrote CRLF on
+  Windows; it is now written atomically.
+- Windows: `os.replace` of a store file that a scanner/reader has open is retried for about a
+  second instead of failing (untested on Windows).
+- First tokenization cost about 0.4-0.5 s on every CLI start (measured here, more on a busy machine): the combining-mark pattern was built by scanning all
+  1.1M Unicode code points. It now scans only the blocks that contain marks (about
+  6x faster: ~0.07 s), producing the identical pattern (tested against a full scan).
+- 4 mypy errors in `monitor.py` / `scoregate.py` (no behaviour change).
+
+### Round 3
 
 ### Added
 - `PipelineConfig(stemming=True)` / `--stem`: opt-in light English stemming in BM25, reranker,

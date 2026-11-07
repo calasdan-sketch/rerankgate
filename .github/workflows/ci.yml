@@ -1,0 +1,46 @@
+# Runs on Linux, Windows and macOS because the library has only ever been tested on Linux by hand.
+# Not run by the author before publishing: the first push is its first real run.
+name: ci
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check .
+      - run: mypy --ignore-missing-imports src
+      - run: python -m pytest -q
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - run: python -m build --outdir dist .
+      - run: twine check dist/*
+      - name: install the built wheel into a clean venv and run the README quick start
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+          cd "$(mktemp -d)"
+          printf '%s\n' '{"id":"rag","text":"Retrieval-augmented generation pairs a retriever with a language model."}' > corpus.jsonl
+          /tmp/clean/bin/rerankgate ingest --input corpus.jsonl --store ./store --no-vectors
+          /tmp/clean/bin/rerankgate query --store ./store --no-vectors --fail-on-insufficient "What is retrieval-augmented generation?"

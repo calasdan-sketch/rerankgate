@@ -389,6 +389,8 @@ class RAGPipeline:
         negatives: the best evidence is returned as answerable regardless of
         the gate, and the override is recorded in the trace.
         """
+        if not isinstance(query, str):
+            raise TypeError(f"query must be a string, not {type(query).__name__}")
         t0 = perf_counter()
         cfg = self.config
         attempts: list[AttemptRecord] = []

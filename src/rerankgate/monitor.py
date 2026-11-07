@@ -189,7 +189,7 @@ class GateMonitor:
     def record(self, answered: bool, score: float, latency_ms: float | None = None) -> None:
         """Record one decision. Non-finite scores are stored as invalid and count as abstentions."""
         valid = _finite(score)
-        lat = float(latency_ms) if _finite(latency_ms) else None
+        lat = float(latency_ms) if latency_ms is not None and _finite(latency_ms) else None
         with self._lock:
             self._events.append((bool(answered) and valid, float(score) if valid else None, lat))
 

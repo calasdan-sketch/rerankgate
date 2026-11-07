@@ -13,7 +13,6 @@ linguistic segmenter.
 from __future__ import annotations
 
 import re
-import sys
 import unicodedata
 from functools import lru_cache
 
@@ -27,17 +26,22 @@ def _token_re() -> re.Pattern[str]:
     The mark ranges are built once, lazily, from this Python's Unicode data.
     """
     ranges: list[str] = []
-    start = None
-    for cp in range(sys.maxunicode + 1):
-        is_mark = unicodedata.category(chr(cp)).startswith("M")
-        if is_mark and start is None:
-            start = cp
-        elif not is_mark and start is not None:
-            ranges.append(f"{_esc(start)}-{_esc(cp - 1)}")
-            start = None
-    if start is not None:  # pragma: no cover - no marks at the very top
-        ranges.append(f"{_esc(start)}-{_esc(sys.maxunicode)}")
+    # Combining marks live in the BMP, plane 1 and the tag/variation block of plane 14. Scanning
+    # only those (not all 1.1M code points) cuts first-use time several-fold; a test compares
+    # this against a full scan so a future Unicode release cannot silently diverge.
+    for lo, hi in _MARK_SCAN:
+        start = None
+        for cp in range(lo, hi + 1):
+            is_mark = cp < hi and unicodedata.category(chr(cp)).startswith("M")
+            if is_mark and start is None:
+                start = cp
+            elif not is_mark and start is not None:
+                ranges.append(f"{_esc(start)}-{_esc(cp - 1)}")
+                start = None
     return re.compile(r"(?:[^\W_]|[" + "".join(ranges) + "])+")
+
+
+_MARK_SCAN = ((0, 0x40000), (0xE0000, 0xE1000))  # half-open [lo, hi)
 
 
 def _esc(cp: int) -> str:

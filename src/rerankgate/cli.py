@@ -1,4 +1,4 @@
-"""rerankgate CLI: ingest | query | eval | calibrate | conformal | riskcov.
+"""rerankgate CLI: ingest | query | info | eval | calibrate | conformal | riskcov.
 
 Exit codes: 0 ok · 1 a quality check failed (``--fail-on-insufficient``,
 ``--fail-under-*``) · 2 bad input or setup (unreadable/empty file, corrupt store).
@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import warnings
 from collections.abc import Iterator
 
 from rerankgate.config import PipelineConfig
@@ -20,17 +22,33 @@ from rerankgate.safeterm import clean
 EXIT_OK = 0
 EXIT_CHECK_FAILED = 1
 EXIT_BAD_INPUT = 2
+EXIT_BROKEN_PIPE = 141  # 128 + SIGPIPE: the reader of our output went away
 
 
 class InputError(Exception):
     """User-facing input problem; reported without a traceback."""
 
 
-def _read_jsonl(path: str, what: str) -> Iterator[tuple[int, dict]]:
+def _has_lone_surrogate(text: str) -> bool:
     try:
-        f = open(path, encoding="utf-8")
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return True
+    return False
+
+
+def _open_text(path: str, what: str):
+    """Open `path` (``-`` = standard input) as UTF-8, tolerating the BOM Windows editors add."""
+    if path == "-":
+        return open(sys.stdin.fileno(), encoding="utf-8-sig", closefd=False)
+    try:
+        return open(path, encoding="utf-8-sig")
     except OSError as exc:
         raise InputError(f"cannot open {what} {path!r}: {exc.strerror or exc}") from exc
+
+
+def _read_jsonl(path: str, what: str) -> Iterator[tuple[int, dict]]:
+    f = _open_text(path, what)
     with f:
         try:
             for lineno, line in enumerate(f, start=1):
@@ -49,7 +67,10 @@ def _read_jsonl(path: str, what: str) -> Iterator[tuple[int, dict]]:
                     raise InputError(f"{what} line {lineno}: expected a JSON object")
                 yield lineno, obj
         except UnicodeDecodeError as exc:
-            raise InputError(f"{what} is not valid UTF-8: {exc}") from exc
+            raise InputError(
+                f"{what} is not valid UTF-8: {exc}. (A file written by Windows PowerShell's "
+                "`>` is UTF-16: re-save it as UTF-8.)"
+            ) from exc
 
 
 def _threshold_from_file(path: str) -> float:
@@ -62,7 +83,7 @@ def _gate_file(path: str) -> tuple[float, dict]:
     import math
 
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:
             obj = json.load(f)
     except OSError as exc:
         raise InputError(f"cannot open gate file {path!r}: {exc.strerror or exc}") from exc
@@ -133,6 +154,11 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         meta = {k: v for k, v in obj.items() if k not in ("id", "text")}
         raw_id = obj.get("id")
         doc_id = f"doc-{lineno}" if raw_id is None else str(raw_id)
+        if _has_lone_surrogate(text) or _has_lone_surrogate(doc_id):
+            raise InputError(
+                f"corpus line {lineno}: contains an unpaired surrogate (invalid Unicode, "
+                "usually from a bad \\udXXX escape); fix or remove that line"
+            )
         docs.append(Document(id=doc_id, text=text, metadata=meta))
     if not docs:
         raise InputError(f"corpus {args.input!r} has no documents; nothing to ingest")
@@ -144,13 +170,50 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     if n_chunks == 0:
         raise InputError("every document was empty; refusing to write an empty store")
     pipe.save(args.store)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "store": args.store,
+                    "documents": len(docs),
+                    "chunks": n_chunks,
+                    "vectors": pipe.vector_store is not None and not pipe.degraded_reason,
+                    "bm25_only": bool(pipe.degraded_reason) or bool(args.no_vectors),
+                }
+            )
+        )
+        return EXIT_OK
     print(f"ingested {len(docs)} documents -> {n_chunks} chunks -> {clean(args.store)}")
     if pipe.degraded_reason:
         print("note: BM25-only mode (no embeddings installed)")
     return EXIT_OK
 
 
+def cmd_info(args: argparse.Namespace) -> int:
+    """Describe a store without running a query: size, mode, model, digest."""
+    import rerankgate
+    from rerankgate.store import DocumentStore
+
+    chunks, vectors, meta = DocumentStore(args.store).load()
+    docs = {c.doc_id for c in chunks}
+    pipe = _pipeline_for(args)
+    info = {
+        "store": args.store,
+        "documents": len(docs),
+        "chunks": len(chunks),
+        "has_vectors": vectors is not None,
+        "embedding_model": meta.get("embedding"),
+        "corpus_digest": pipe.corpus_digest(),
+        "fingerprint": pipe.fingerprint(),
+        "rerankgate_version": rerankgate.__version__,
+    }
+    print(json.dumps(info, indent=2))
+    return EXIT_OK
+
+
 def cmd_query(args: argparse.Namespace) -> int:
+    if not args.query.strip():
+        raise InputError("the query is empty; give a question to ask")
     pipe = _pipeline_for(args)
     if args.audit_log:
         from rerankgate.audit import AuditLog
@@ -167,6 +230,10 @@ def cmd_query(args: argparse.Namespace) -> int:
     if args.json:
         # JSON escapes control characters itself; ensure_ascii also escapes
         # bidi/zero-width characters, so the output is terminal-safe.
+        from rerankgate.abstain import explain_abstention
+
+        notice = explain_abstention(result)
+        out["notice"] = notice.to_dict() if notice is not None else None
         print(json.dumps(out, indent=2))
         return rc
     print(f"verdict:  {out['verdict']}")
@@ -265,17 +332,18 @@ def cmd_conformal(args: argparse.Namespace) -> int:
     out = res.to_dict()
     print(json.dumps(out, indent=2))
     if args.out:
-        try:
-            with open(args.out, "w", encoding="utf-8") as f:
-                import rerankgate
+        import rerankgate
+        from rerankgate.store import _atomic_write
 
-                out = {
-                    **out,
-                    "fingerprint": pipe.fingerprint(),
-                    "corpus_digest": pipe.corpus_digest(),
-                    "version": rerankgate.__version__,
-                }
-                json.dump({"threshold": res.threshold, "calibration": out}, f, indent=2)
+        out = {
+            **out,
+            "fingerprint": pipe.fingerprint(),
+            "corpus_digest": pipe.corpus_digest(),
+            "version": rerankgate.__version__,
+        }
+        blob = json.dumps({"threshold": res.threshold, "calibration": out}, indent=2)
+        try:
+            _atomic_write(args.out, (blob + "\n").encode("utf-8"))
         except OSError as exc:
             raise InputError(f"cannot write {args.out!r}: {exc.strerror or exc}") from exc
     if not res.achievable:
@@ -364,6 +432,7 @@ def build_parser() -> argparse.ArgumentParser:
     pi = sub.add_parser("ingest", help="ingest a JSONL corpus into a store")
     pi.add_argument("--input", required=True, help="JSONL with {id, text, ...metadata}")
     pi.add_argument("--store", required=True, help="output store directory")
+    pi.add_argument("--json", action="store_true", help="print one JSON summary line")
     _common(pi)
     pi.set_defaults(func=cmd_ingest)
 
@@ -384,6 +453,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _common(pq)
     pq.set_defaults(func=cmd_query)
+
+    pn = sub.add_parser("info", help="describe a store (size, mode, model, digests) as JSON")
+    pn.add_argument("--store", required=True)
+    _common(pn)
+    pn.set_defaults(func=cmd_info)
 
     pv = sub.add_parser("audit-verify", help="check a decision log's hash chain")
     pv.add_argument("log")
@@ -443,18 +517,43 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _harden_streams() -> None:
+    """Never crash on output: a Windows console (cp1252) or C-locale pipe cannot encode every
+    character of a corpus, so unencodable ones are written as \\uXXXX escapes instead."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
     from rerankgate.store import StoreError
 
+    _harden_streams()
     args = build_parser().parse_args(argv)
     try:
-        return args.func(args)
+        with warnings.catch_warnings():
+            # The CLI already says "BM25-only" in its own output; the library warning repeats it.
+            warnings.filterwarnings("ignore", message="rerankgate: embeddings unavailable")
+            return args.func(args)
     except InputError as exc:
         print(f"rerankgate: error: {clean(exc)}", file=sys.stderr)
         return EXIT_BAD_INPUT
+    except BrokenPipeError:
+        # e.g. `rerankgate query ... | head`: stop quietly, and keep Python from re-raising
+        # while it flushes the dead pipe at exit.
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except (OSError, ValueError):
+            pass
+        return EXIT_BROKEN_PIPE
     except (StoreError, OSError) as exc:  # FileNotFoundError is an OSError
         print(f"rerankgate: error: {clean(exc)}", file=sys.stderr)
         return EXIT_BAD_INPUT
+    except KeyboardInterrupt:
+        print("rerankgate: interrupted", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

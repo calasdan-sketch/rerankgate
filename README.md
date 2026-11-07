@@ -20,9 +20,13 @@ Local-first — the sufficiency gate works with zero LLM calls by default.
 ## Install
 
 ```bash
-pip install rerankgate            # zero hard dependencies (BM25-only mode)
-pip install "rerankgate[local]"   # + sentence-transformers, numpy (hybrid vectors)
+pip install "rerankgate>=0.4"            # zero hard dependencies (BM25-only mode)
+pip install "rerankgate[local]>=0.4"     # + sentence-transformers, numpy (hybrid vectors)
 ```
+
+Python 3.10 or newer. Everything below needs 0.4 or later; the `>=0.4` stops pip from quietly
+giving you the older 0.2.0 release. Until 0.4.0 is on PyPI, install from the repository instead:
+`pip install "git+https://github.com/calasdan-sketch/rerankgate"`.
 
 ## Quickstart
 
@@ -63,7 +67,7 @@ retry count, gate features, and whether the run was degraded.
 ## 60-second demo (no extra installs)
 
 ```bash
-pip install rerankgate
+pip install "rerankgate>=0.4"
 cat > corpus.jsonl <<'EOF'
 {"id": "rag", "text": "Retrieval-augmented generation pairs a retriever with a language model."}
 {"id": "bread", "text": "Sourdough bread needs a starter, flour, water and patience."}
@@ -84,8 +88,15 @@ gate refusing to hand off-topic context to a model. (Synthetic example corpus.)
 rerankgate ingest --input corpus.jsonl --store ./store
 
 rerankgate query --store ./store "What is RAG?"
-rerankgate query --store ./store --gate-preset lenient --json "..."
+rerankgate query --store ./store --gate-preset lenient --json "..."   # adds a "notice" block
+rerankgate info --store ./store   # documents, chunks, mode, embedding model, digests (JSON)
+```
 
+`ingest --input -` reads the corpus from standard input; `ingest --json` prints one summary line.
+Files may have a UTF-8 BOM or Windows (CRLF) line endings. Anything else (UTF-16 from PowerShell's
+`>`, a stray byte) is refused with a plain message, never a traceback.
+
+```bash
 # Evaluate retrieval + gate on labeled data, then tune the threshold.
 # qrels JSONL: {"query": ..., "relevant_ids": [...], "answerable": true/false}
 rerankgate eval --store ./store --qrels eval.jsonl
@@ -235,7 +246,10 @@ rerankgate query --store ./store --fail-on-insufficient "..."
 
 Exit codes: `0` ok · `1` a quality check failed · `2` bad input or setup
 (unreadable/empty corpus or qrels, malformed JSONL with the line number,
-corrupt store). Empty inputs fail closed — an empty eval never "passes".
+corrupt store, empty query) · `130` Ctrl-C · `141` the program reading our output (e.g. `head`)
+closed the pipe. Empty inputs fail closed — an empty eval never "passes". Results go to
+stdout, errors and warnings to stderr. Output that a non-UTF-8 console cannot show is written as
+`\uXXXX` escapes, never a crash.
 
 ## How the gate works
 
@@ -293,7 +307,7 @@ Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
 
 ## Benchmark: does the gate actually stop false answers?
 
-`python benchmarks/bench_gate.py` (committed data, ~10 s, no installs). 246 real
+`python benchmarks/bench_gate.py` ([source](https://github.com/calasdan-sketch/rerankgate/blob/HEAD/benchmarks/bench_gate.py), committed data, about 20 s of CPU on a 2-vCPU cloud VM, no installs). 246 real
 docstring documents (Python standard library); 217 answerable queries and 223 unanswerable
 ones (foreign-domain numpy/scipy/sklearn text, everyday off-topic questions, and hybrids
 mixing both). **Labels are synthetic** (we know which document a query was drawn from), the
@@ -374,7 +388,7 @@ How much faster it is depends on the query. On a synthetic 20,000-chunk corpus
 BM25 keeps stopwords, so a question such as "what is the …" touches most
 chunks: expect the lower end (roughly 3–5x) for natural-language questions and
 the higher end for keyword queries. Reproduce with
-`python benchmarks/bench_bm25.py 20000`; numbers vary by hardware and corpus.
+`python benchmarks/bench_bm25.py 20000` (in the [repository](https://github.com/calasdan-sketch/rerankgate/tree/HEAD/benchmarks), not in the wheel); numbers vary by hardware and corpus.
 The numpy vector path now caches its normalized matrix instead of rebuilding
 it per query.
 
@@ -412,9 +426,16 @@ it per query.
   vector DB.
 - `remove`/`upsert` change the corpus the false-answer bound was measured on: after large
   changes, re-run `conformal`.
+- **Windows is untested.** The author has only run this on Linux. The code avoids POSIX-only
+  calls, retries a locked file replace, writes UTF-8 explicitly, and the repository ships a CI
+  workflow that tests Windows, macOS and Linux on Python 3.10 and 3.13 - but nobody has seen it
+  pass on Windows yet. Python 3.10 itself was also not run by the author (3.11-3.13 were).
+- A read-only store directory is not tested as a non-root user: queries should work (loading
+  only reads), `ingest` into it should fail with a plain error.
 - `calibrate` re-runs the pipeline once per threshold (11 runs by default) —
   cheap with BM25, slower with a hosted embedding API.
 
 ## License
 
-MIT — Calas Automations Inc.
+MIT - see [LICENSE](https://github.com/calasdan-sketch/rerankgate/blob/HEAD/LICENSE). Copyright
+(c) 2026 Calas Automations Inc. Source and issues: https://github.com/calasdan-sketch/rerankgate

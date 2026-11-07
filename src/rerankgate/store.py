@@ -29,6 +29,7 @@ import math
 import os
 import sys
 import tempfile
+import time
 from array import array
 from dataclasses import asdict, fields
 
@@ -51,6 +52,25 @@ def _sha256(path: str) -> str:
     return h.hexdigest()
 
 
+def _replace(src: str, dst: str) -> None:
+    """``os.replace`` that tolerates Windows briefly locking the target.
+
+    On Windows, replacing a file another process (a virus scanner, an indexer, a reader) has
+    open raises PermissionError. Retry for about a second, then raise the real error.
+    Elsewhere the first attempt succeeds. (Not exercised on Windows; see docs/ROUND4.md.)
+    """
+    delay = 0.02
+    for attempt in range(8):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == 7:
+                raise
+            time.sleep(delay)
+            delay *= 2
+
+
 def _atomic_write(path: str, data: bytes) -> None:
     d = os.path.dirname(path) or "."
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-", suffix=os.path.basename(path))
@@ -59,7 +79,7 @@ def _atomic_write(path: str, data: bytes) -> None:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, path)
+        _replace(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)
@@ -121,9 +141,15 @@ class DocumentStore:
             raise StoreError("vectors have inconsistent dimensions")
         os.makedirs(self.path, exist_ok=True)
 
-        chunk_bytes = "".join(
-            json.dumps(asdict(ch), ensure_ascii=False) + "\n" for ch in chunks
-        ).encode("utf-8")
+        try:
+            chunk_bytes = "".join(
+                json.dumps(asdict(ch), ensure_ascii=False) + "\n" for ch in chunks
+            ).encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise StoreError(
+                "cannot save: a document id, text or metadata value contains an unpaired "
+                "surrogate (invalid Unicode); clean the source text"
+            ) from exc
         _atomic_write(self.chunks_file, chunk_bytes)
         info = {
             "format": STORE_FORMAT,
