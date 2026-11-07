@@ -78,8 +78,9 @@ class GateDecision:
 class SufficiencyGate:
     """Decide whether reranked evidence is sufficient to answer the query."""
 
-    def __init__(self, config: GateConfig | None = None) -> None:
+    def __init__(self, config: GateConfig | None = None, stem: bool = False) -> None:
         self.config = config or GateConfig()
+        self.stem = stem
 
     def evaluate(self, query: str, evidence: list[ScoredChunk]) -> GateDecision:
         t0 = perf_counter()
@@ -149,7 +150,7 @@ class SufficiencyGate:
         )
 
     def _features(self, query: str, evidence: list[ScoredChunk]) -> GateFeatures:
-        q_terms = set(content_tokens(query))
+        q_terms = set(content_tokens(query, self.stem))
         scores = [c.score for c in evidence]
         top = scores[0] if scores else 0.0
         # Normalize top score to [0,1] against the observed max for stability.
@@ -157,19 +158,32 @@ class SufficiencyGate:
 
         ev_toks: set[str] = set()
         for c in evidence:
-            ev_toks |= set(tokenize(c.chunk.text))
+            ev_toks |= set(tokenize(c.chunk.text, self.stem))
         coverage = len(q_terms & ev_toks) / len(q_terms) if q_terms else 0.0
 
+        # Margin and corroboration are judged over DISTINCT contents. Copies of one passage
+        # (the same page under two ids, a re-uploaded version) are one piece of evidence:
+        # counting them would zero the margin (false abstention) and fake "consensus"
+        # (a duplicated weak chunk would raise its own score).
+        distinct: list[tuple[ScoredChunk, frozenset[str]]] = []
+        seen_sets: set[frozenset[str]] = set()
+        for c in evidence:
+            key = frozenset(content_tokens(c.chunk.text, self.stem))
+            if key in seen_sets:
+                continue
+            seen_sets.add(key)
+            distinct.append((c, key))
+        d_scores = [c.score for c, _ in distinct]
+
         margin = 0.0
-        if len(scores) >= 2 and scores[0] > 0:
-            margin = max(0.0, (scores[0] - scores[1]) / scores[0])
+        if len(d_scores) >= 2 and d_scores[0] > 0:
+            margin = max(0.0, (d_scores[0] - d_scores[1]) / d_scores[0])
 
         support = 0.0
-        top3 = evidence[:3]
-        if len(top3) >= 2:
+        sets = [k for _, k in distinct[:3]]
+        if len(sets) >= 2:
             pairs = 0
             acc = 0.0
-            sets = [set(content_tokens(c.chunk.text)) for c in top3]
             for i in range(len(sets)):
                 for j in range(i + 1, len(sets)):
                     a, b = sets[i], sets[j]

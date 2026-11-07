@@ -193,7 +193,7 @@ class ScoreGate:
                 neg_stats=neg,
                 n_calibration=int(d["n_calibration"]),
             )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, RecursionError) as exc:
             raise ValueError(f"malformed ScoreGate file: {exc}") from exc
         if (tau is not None and not math.isfinite(tau)) or not all(math.isfinite(x) for x in neg):
             raise ValueError("malformed ScoreGate file: non-finite numbers")

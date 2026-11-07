@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import json
 import math
+import threading
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Literal
 
+from rerankgate.audit import AuditLog
 from rerankgate.bm25 import BM25Index
-from rerankgate.config import PipelineConfig
+from rerankgate.config import GateConfig, PipelineConfig
 from rerankgate.documents import Chunk, Document, chunk_text
 from rerankgate.embeddings import EmbeddingBackend, SentenceTransformerBackend
 from rerankgate.gate import GateDecision, SufficiencyGate, effective_score
+from rerankgate.injection import flag_instructions
 from rerankgate.judge import FaithfulnessReport, HeuristicJudge, Judge
 from rerankgate.metrics import EvalItem, aggregate
 from rerankgate.monitor import GateMonitor
@@ -134,6 +139,20 @@ class AnswerResult:
         }
 
 
+def _validate_ids(documents: list[Document], existing: set[str]) -> None:
+    batch: set[str] = set()
+    for doc in documents:
+        if not isinstance(doc.id, str) or not doc.id:
+            raise ValueError(f"document id must be a non-empty string, got {doc.id!r}")
+        if "#c" in doc.id:
+            raise ValueError(f"document id {doc.id!r} must not contain '#c' (chunk-id marker)")
+        if doc.id in existing or doc.id in batch:
+            # Duplicate ids would produce colliding chunk ids and silently
+            # merge two documents' scores during fusion.
+            raise ValueError(f"duplicate document id {doc.id!r}")
+        batch.add(doc.id)
+
+
 class RAGPipeline:
     """Drop-in retrieval pipeline with a sufficiency gate.
 
@@ -150,14 +169,16 @@ class RAGPipeline:
         judge: Judge | None = None,
     ) -> None:
         self.config = config or PipelineConfig()
-        self.bm25 = BM25Index()
+        self._lock = threading.RLock()  # guards the indexes against concurrent ingest/remove
+        self.bm25 = BM25Index(stem=self.config.stemming)
         self.chunks: list[Chunk] = []
-        self.reranker: Reranker = reranker or FeatureReranker()
+        self.reranker: Reranker = reranker or FeatureReranker(stem=self.config.stemming)
         self.judge: Judge = judge or HeuristicJudge()
-        self.gate = SufficiencyGate(self.config.effective_gate())
+        self.gate = self._make_gate(self.config.effective_gate())
         self.rewriter = RM3Rewriter(expansion_terms=self.config.retry.expansion_terms)
         self.faithfulness_floor = 0.35
         self.monitor: GateMonitor | None = None  # optional drift monitor (see monitor.py)
+        self.audit: AuditLog | None = None  # optional tamper-evident decision log (audit.py)
 
         self.embeddings: EmbeddingBackend | None = None
         self.vector_store: VectorStore | None = None
@@ -177,25 +198,94 @@ class RAGPipeline:
                         stacklevel=2,
                     )
 
+    def _make_gate(self, cfg: GateConfig) -> SufficiencyGate:
+        return SufficiencyGate(cfg, stem=self.config.stemming)
+
     def _enable_vectors(self, backend: EmbeddingBackend) -> None:
         self.embeddings = backend
         self.vector_store = VectorStore(dim=backend.dim)
 
+    # -- identity ------------------------------------------------------
+    def fingerprint(self) -> str:
+        """SHA-256 of everything that changes gate SCORES (not the threshold itself).
+
+        A threshold calibrated under one fingerprint is only meaningful under the same one:
+        change the weights, chunking, stemming, reranker or retrieval modes and the same
+        number means something else. ``conformal --out`` stores it; ``--gate-file`` checks it.
+        """
+        g = dataclasses.asdict(self.config.effective_gate())
+        g.pop("threshold")
+        spec = {
+            "v": 1,
+            "gate": g,
+            "retry": dataclasses.asdict(self.config.retry),
+            "chunk": [self.config.chunk_size, self.config.chunk_overlap],
+            "fusion": [self.config.rrf_k, self.config.bm25_weight, self.config.vector_weight],
+            "retrieve_k": self.config.retrieve_k,
+            "rerank_k": self.config.rerank_k,
+            "stemming": self.config.stemming,
+            "quarantine": self.config.quarantine_suspect_evidence,
+            "reranker": self.reranker.name,
+            "modes": self._retriever().modes,
+            "embedding": self.embeddings.name if self.embeddings else None,
+        }
+        blob = json.dumps(spec, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(blob.encode()).hexdigest()
+
+    def corpus_digest(self) -> str:
+        """SHA-256 over chunk ids and texts (order-independent)."""
+        h = hashlib.sha256()
+        for line in sorted(f"{c.id}\x00{c.text}" for c in self.chunks):
+            h.update(hashlib.sha256(line.encode("utf-8", "replace")).digest())
+        return h.hexdigest()
+
     # -- ingestion -----------------------------------------------------
     def ingest(self, documents: list[Document]) -> int:
-        """Chunk, index, and embed documents. Returns chunk count added."""
-        seen = {c.doc_id for c in self.chunks}
-        batch: set[str] = set()
-        for doc in documents:
-            if not isinstance(doc.id, str) or not doc.id:
-                raise ValueError(f"document id must be a non-empty string, got {doc.id!r}")
-            if "#c" in doc.id:
-                raise ValueError(f"document id {doc.id!r} must not contain '#c' (chunk-id marker)")
-            if doc.id in seen or doc.id in batch:
-                # Duplicate ids would produce colliding chunk ids and silently
-                # merge two documents' scores during fusion.
-                raise ValueError(f"duplicate document id {doc.id!r}")
-            batch.add(doc.id)
+        """Chunk, index, and embed documents. Returns chunk count added.
+
+        Safe to call while other threads call ``ask()``: the whole update happens under a lock
+        and an embedding failure leaves the index untouched.
+        """
+        with self._lock:
+            return self._ingest(documents)
+
+    def remove(self, doc_ids: list[str]) -> int:
+        """Delete documents (all their chunks) from the indexes. Returns chunks removed.
+
+        Unknown ids are ignored. Removal is incremental (tombstones, compacted when a
+        quarter of the rows are dead). A gate threshold calibrated before a large change to
+        the corpus may no longer be valid - recalibrate.
+        """
+        ids = set(doc_ids)
+        with self._lock:
+            removed = len(self.chunks)
+            self.chunks = [c for c in self.chunks if c.doc_id not in ids]
+            removed -= len(self.chunks)
+            if removed:
+                self.bm25.remove_docs(ids)
+                if self.vector_store is not None:
+                    self.vector_store.remove_docs(ids)
+            return removed
+
+    def upsert(self, documents: list[Document]) -> int:
+        """Insert documents, replacing any existing document with the same id.
+
+        All-or-nothing: the new documents are chunked, embedded and validated BEFORE anything
+        is removed, so a bad id or a failing embedding backend leaves the index as it was.
+        Returns the number of chunks added.
+        """
+        with self._lock:
+            _validate_ids(documents, set())
+            prepared = self._prepare(documents)
+            self.remove([d.id for d in documents])
+            return self._commit(*prepared)
+
+    def _ingest(self, documents: list[Document]) -> int:
+        _validate_ids(documents, {c.doc_id for c in self.chunks})
+        return self._commit(*self._prepare(documents))
+
+    def _prepare(self, documents: list[Document]) -> tuple[list[Chunk], list[list[float]] | None]:
+        """Everything that can fail (chunking, embedding, vector checks); touches no index."""
         new_chunks: list[Chunk] = []
         for doc in documents:
             new_chunks.extend(
@@ -207,11 +297,18 @@ class RAGPipeline:
                     metadata=doc.metadata,
                 )
             )
+        vecs = None
+        if self.embeddings is not None and self.vector_store is not None:
+            vecs = self.vector_store.validate(self.embeddings.embed([c.text for c in new_chunks]))
+            if len(vecs) != len(new_chunks):
+                raise ValueError("embedding backend returned the wrong number of vectors")
+        return new_chunks, vecs
+
+    def _commit(self, new_chunks: list[Chunk], vecs: list[list[float]] | None) -> int:
+        if vecs is not None and self.vector_store is not None:
+            self.vector_store.add(new_chunks, vecs)
         self.chunks.extend(new_chunks)
         self.bm25.add(new_chunks)
-        if self.embeddings is not None and self.vector_store is not None:
-            vecs = self.embeddings.embed([c.text for c in new_chunks])
-            self.vector_store.add(new_chunks, vecs)
         return len(new_chunks)
 
     def save(self, path: str) -> None:
@@ -274,7 +371,8 @@ class RAGPipeline:
         return retr
 
     def retrieve(self, query: str, k: int | None = None) -> RetrievalResult:
-        return self._retriever().retrieve(query, k=k or self.config.retrieve_k)
+        with self._lock:
+            return self._retriever().retrieve(query, k=k or self.config.retrieve_k)
 
     def ask(
         self,
@@ -296,15 +394,23 @@ class RAGPipeline:
         attempts: list[AttemptRecord] = []
         best: tuple[tuple[bool, float], list[ScoredChunk], GateDecision, str] | None = None
         eff_max = -1.0
+        suspect: list[str] = []
         current_query = query
 
         for attempt in range(cfg.retry.max_retries + 1):
-            retrieval = self._retriever().retrieve(current_query, k=cfg.retrieve_k)
+            with self._lock:
+                retrieval = self._retriever().retrieve(current_query, k=cfg.retrieve_k)
             # Expansion only widens the candidate pool. Rerank and gate against the
             # ORIGINAL query: the expansion terms come from the evidence itself, so
             # judging sufficiency on the expanded query is circular (it made
             # off-topic queries pass after a retry).
-            reranked = self.reranker.rerank(query, retrieval.chunks, k=cfg.rerank_k)
+            candidates = retrieval.chunks
+            for sc in candidates:
+                if sc.chunk.id not in suspect and flag_instructions(sc.chunk.text):
+                    suspect.append(sc.chunk.id)
+            if self.config.quarantine_suspect_evidence:
+                candidates = [c for c in candidates if c.chunk.id not in suspect]
+            reranked = self.reranker.rerank(query, candidates, k=cfg.rerank_k)
             decision = self.gate.evaluate(query, reranked)
             attempts.append(
                 AttemptRecord(
@@ -351,6 +457,7 @@ class RAGPipeline:
                 verdict = NEEDS_REVIEW
 
         total_ms = round((perf_counter() - t0) * 1000, 2)
+        used = {c.chunk.id for c in evidence}
         trace = {
             "modes": self._retriever().modes,
             "degraded": self.degraded_reason,
@@ -362,6 +469,9 @@ class RAGPipeline:
             "gate_score": eff_max,
             "total_ms": total_ms,
             "chunk_count": len(self.chunks),
+            "stemming": self.config.stemming,
+            "suspect_evidence": [i for i in suspect if i in used],
+            "suspect_quarantined": self.config.quarantine_suspect_evidence,
         }
         result = AnswerResult(
             verdict=verdict,
@@ -375,6 +485,10 @@ class RAGPipeline:
         )
         if self.monitor is not None:
             self.monitor.record(answered=decision.passed, score=eff_max, latency_ms=total_ms)
+        if self.audit is not None:
+            from rerankgate import __version__
+
+            self.audit.record(result, self.fingerprint(), __version__)
         return result
 
     def evaluate(self, items: list[EvalItem]) -> dict:
@@ -432,7 +546,7 @@ class RAGPipeline:
         rows: list[dict] = []
         try:
             for t in sorted(set(thresholds)):
-                self.gate = SufficiencyGate(dataclasses.replace(base, threshold=t))
+                self.gate = self._make_gate(dataclasses.replace(base, threshold=t))
                 rep = self.evaluate(items)
                 p, r = rep["gate_precision"], rep["gate_recall"]
                 f1 = 2 * p * r / (p + r) if (p + r) else 0.0
@@ -476,7 +590,7 @@ class RAGPipeline:
         original, monitor = self.gate, self.monitor
         base = self.config.effective_gate()
         huge = base.w_top_score + base.w_coverage + base.w_margin + base.w_support + 1.0
-        self.gate = SufficiencyGate(dataclasses.replace(base, threshold=huge))
+        self.gate = self._make_gate(dataclasses.replace(base, threshold=huge))
         self.monitor = None
         try:
             return [self.ask(q) for q in queries]
@@ -541,5 +655,5 @@ class RAGPipeline:
             far_ci95=cal.wilson_interval(sum(1 for s in neg_s if s > tau), len(neg_s)),
         )
         if apply:
-            self.gate = SufficiencyGate(dataclasses.replace(base, threshold=threshold))
+            self.gate = self._make_gate(dataclasses.replace(base, threshold=threshold))
         return res

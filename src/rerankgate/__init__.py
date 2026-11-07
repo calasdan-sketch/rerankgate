@@ -7,6 +7,8 @@ works without any LLM call by default.
 """
 
 from rerankgate.abstain import AbstentionNotice, explain_abstention
+from rerankgate.audit import AuditLog
+from rerankgate.audit import verify as verify_audit
 from rerankgate.config import GateConfig, PipelineConfig, RetryConfig
 from rerankgate.documents import Document, chunk_text
 from rerankgate.gate import GateDecision, SufficiencyGate
@@ -19,6 +21,7 @@ from rerankgate.store import StoreError
 __all__ = [
     "AbstentionNotice",
     "AnswerResult",
+    "AuditLog",
     "Baseline",
     "ConformalResult",
     "Document",
@@ -36,6 +39,7 @@ __all__ = [
     "Verdict",
     "chunk_text",
     "explain_abstention",
+    "verify_audit",
 ]
 
 __version__ = "0.4.0"

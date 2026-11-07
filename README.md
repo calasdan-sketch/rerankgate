@@ -50,6 +50,13 @@ result = pipe.ask("...", generator=lambda q, ev: my_llm(q, [c.chunk.text for c i
 # verdict flips to "needs_review" if the answer isn't grounded in the evidence.
 ```
 
+Keep the index current without rebuilding it, from any number of threads:
+
+```python
+pipe.upsert([Document(id="rag", text="new text")])  # replace-by-id, all-or-nothing
+pipe.remove(["old-doc"])  # incremental; results equal a fresh build
+```
+
 Every `ask()` returns a full `trace`: per-stage timings, retrieval modes,
 retry count, gate features, and whether the run was degraded.
 
@@ -129,8 +136,9 @@ Already have Cohere/BGE/Jina/ms-marco/Pinecone/pgvector scores? No pipeline need
 
 ```python
 from rerankgate import ScoreGate
-gate = ScoreGate.fit(score_lists, answerable_flags, alpha=0.05)   # lists of raw scores per query
-d = gate.decide(scores_for_new_query)   # d.passed, d.p_value, d.reason
+
+gate = ScoreGate.fit(score_lists, answerable_flags, alpha=0.05)  # lists of raw scores per query
+d = gate.decide(scores_for_new_query)  # d.passed, d.p_value, d.reason
 open("gate.json", "w").write(gate.to_json())
 ```
 
@@ -139,14 +147,63 @@ this high. Non-finite or empty scores abstain (`INVALID_SCORE` / `NO_EVIDENCE`).
 `higher_is_better=False` for distances. `statistic="auto"` chooses between top score,
 gap to runner-up and a z-score on half your data and calibrates on the other half.
 
+A gate file is only valid for the scoring setup it was calibrated under. `conformal --out`
+stores a fingerprint of everything that changes scores (gate weights and floors, chunking,
+stemming, reranker, retrieval modes, embedding model; not the threshold), and `--gate-file`
+**refuses** (exit 2) a file whose fingerprint differs from the pipeline you are running. It
+only *warns* if the corpus changed, or if the file predates fingerprints. Python:
+`pipe.fingerprint()`, `pipe.corpus_digest()`.
+
+### Match inflections (opt-in stemming)
+
+```bash
+rerankgate query --store ./store --stem "restarting servers"   # matches "the server restarts"
+```
+
+`PipelineConfig(stemming=True)` applies a deliberately light English stemmer
+(plurals, `-ing`, `-ed`, trailing `e`; identifiers, numbers and other scripts untouched) in
+BM25, the reranker and the gate. Off by default, because it changes scores: use the same
+setting for ingest-time checks, `conformal` and `query` (the fingerprint enforces this). It is
+not Porter (`generation` stays `generation`). Cost: on the committed benchmark, whose
+queries copy the documents' wording, it lowers calibrated recall (see Benchmark); it pays
+off when users phrase things differently from your documents.
+
+### Decision log for auditors
+
+```python
+from rerankgate import AuditLog, verify_audit
+
+pipe.audit = AuditLog("decisions.jsonl")  # query text is stored as SHA-256 only
+...
+verify_audit("decisions.jsonl", expected_head=saved_head)  # or: rerankgate audit-verify FILE
+```
+
+One JSON line per `ask()`: verdict, gate score and threshold, reason codes, evidence chunk
+ids, retries, whether the gate was overridden, library version, and the scoring fingerprint.
+Each line contains the SHA-256 of the previous one, so an edited, deleted-from-the-middle or
+reordered line is detected. Honest limits: anyone who can write the file can rewrite the whole
+chain, and a deleted *tail* is invisible unless you keep `AuditLog.head` somewhere the writer
+cannot reach (pass it as `expected_head`). Single writer process. If the log cannot be
+written, `ask()` raises instead of answering unlogged. A log whose last line was cut by a crash
+fails verification and is not appended to; move it aside to start a new one.
+`rerankgate query --audit-log FILE [--audit-queries]`.
+
+### Poisoned documents (tripwire, not a defence)
+
+Every `ask()` lists chunks that read like instructions to a model ("ignore previous
+instructions...") in `trace["suspect_evidence"]`; `PipelineConfig(quarantine_suspect_evidence=True)`
+also drops them before reranking. This is a handful of regexes: rephrasing, other languages or
+indirect wording bypass it. Treat retrieved text as untrusted in your prompt design.
+
 ### Watch for drift in production
 
 ```python
 from rerankgate import GateMonitor, Baseline
-base = Baseline.from_events(scores, answered_flags)      # at calibration time
+
+base = Baseline.from_events(scores, answered_flags)  # at calibration time
 pipe.monitor = GateMonitor(base, window=500, max_p95_latency_ms=200)
 ...
-report = pipe.monitor.check()    # status ok | warming_up | alert, plus named alerts
+report = pipe.monitor.check()  # status ok | warming_up | alert, plus named alerts
 ```
 
 Alerts: `ABSTAIN_RATE_SHIFT` (two-proportion z-test), `SCORE_DRIFT` (PSI over baseline
@@ -157,9 +214,10 @@ Below `min_n` events it says `warming_up` instead of crying wolf.
 
 ```python
 from rerankgate import explain_abstention
-notice = explain_abstention(result)   # None if answered
-notice.kind     # no_match | partial | ambiguous | error
-notice.action   # search | clarify | retry_later
+
+notice = explain_abstention(result)  # None if answered
+notice.kind  # no_match | partial | ambiguous | error
+notice.action  # search | clarify | retry_later
 notice.message  # plain sentence; never echoes evidence text
 notice.missing_terms, notice.matched_terms, notice.nearest_sources, notice.clarifying_question
 ```
@@ -187,6 +245,9 @@ plus hard floors on coverage and top score. Every decision carries stable
 machine-readable reason codes (`PASS`, `LOW_TOP_SCORE`, `LOW_COVERAGE`,
 `NO_MARGIN`, `NO_CONSENSUS`, `NO_EVIDENCE`, `INVALID_SCORE`) and a human explanation. Nothing is
 learned, so there's nothing to overfit; tune it with the eval CLI.
+
+Margin and corroboration are computed over *distinct* passages: the same text stored under
+several ids counts once (before 0.4 it zeroed the margin and faked "consensus").
 
 Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
 
@@ -218,6 +279,9 @@ Presets: `strict` (0.70) · `balanced` (0.55, default) · `lenient` (0.40).
   Stores written by 0.2 (`vectors.npy`) still load.
 - **No model mixing.** A store embedded with one model is re-embedded when
   loaded with a different one — even if the vector size matches.
+- **Hostile files fail closed.** Absurdly nested JSON in a corpus, store, gate file, baseline or
+  audit log is reported as bad input (exit 2), not a Python traceback. Chunk size/overlap
+  that would loop forever (`overlap >= size`) are rejected.
 - **Terminal-safe output.** Corpus text is untrusted: the CLI escapes ANSI
   control sequences, bidi overrides and zero-width characters as `\uXXXX`.
 - **Fail-closed defaults.** A NaN/inf/non-numeric reranker score fails the
@@ -239,13 +303,13 @@ Mean over 200 random 50/50 calibration/test splits; target alpha = 5%, delta = 1
 
 | Method | False-answer rate | Splits above 5% | Answerable recall | Answer precision |
 |---|---|---|---|---|
-| raw top-1 BM25 cutoff, tuned for F1 (what a "similarity cutoff" gives you) | 8.6% | 77% | 90.4% | 91.2% |
-| rerankgate default gate (0.55), no calibration | 13.2% | 100% | 99.2% | 87.5% |
-| rerankgate + `conformal` (alpha 0.05) | **4.4%** | 40% | 97.9% | 95.1% |
-| rerankgate + `conformal` (alpha 0.05, delta 0.10) | **2.5%** | **12%** | 93.1% | 96.9% |
-| `ScoreGate` on raw BM25 scores | 3.5% | 24% | 78.6% | 96.0% |
+| raw top-1 BM25 cutoff, tuned for F1 (what a "similarity cutoff" gives you) | 8.6% | 78% | 90.5% | 91.2% |
+| rerankgate default gate (0.55), no calibration | 12.3% | 100% | 99.2% | 88.1% |
+| rerankgate + `conformal` (alpha 0.05) | **4.4%** | 40% | 98.0% | 95.1% |
+| rerankgate + `conformal` (alpha 0.05, delta 0.10) | **2.5%** | **12%** | 93.4% | 96.9% |
+| `ScoreGate` on raw BM25 scores | 3.5% | 24% | 78.5% | 96.0% |
 
-Reading it: the default threshold lets through 13% of unanswerable queries; the conformal
+Reading it: the default threshold lets through 12% of unanswerable queries; the conformal
 threshold brings the average under 5% (as promised) at a 1-point recall cost, and the
 high-probability variant exceeds 5% in about delta of splits (12% observed, 10% promised;
 200 overlapping splits of one finite dataset, so +-3 points of noise). Honest caveat: the
@@ -254,10 +318,28 @@ AUC 0.171 vs 0.173; oracle 0.160, answering everything 0.509) - the step change 
 *calibrated, bounded* decision, not a better ranking signal. Also found and fixed here:
 before 0.4 the query-rewrite retries inflated false answers from 27 to 119 of 223
 unanswerable queries, because the gate judged coverage against the expanded query.
+(0.4 round 3 also removed a duplicate-passage artefact and a half-word chunk-overlap bug,
+which moved the default-gate false-answer rate from 13.2% to 12.3%; the other rows moved by
+<= 0.2 points.)
+
+**Stemming, same benchmark** (`PipelineConfig(stemming=True)`): default gate 12.8% false
+answers / 99.2% recall; `conformal` 4.2% / 96.4%; `conformal` with `delta` 2.6% / 88.6% (was
+93.4% unstemmed). The queries here copy the documents' wording, so stemming has nothing to
+fix and costs calibrated recall: broader matching also lets more unanswerable queries score
+high, so the calibrated threshold rises. Where it helps is varied wording. Stress test
+(`inflected_queries` in `results.json`): flip singular/plural on every word of 5+ letters
+of every query, default threshold: **5.1% of answerable queries are still answered without
+stemming, 95.4% with it**, at 0.9% vs 9.4% of unanswerable queries answered (the 9.4% matches
+the unflipped stemmed run, 12.8%, within noise). That perturbation is extreme and
+synthetic; it shows how brittle exact-word matching is, not what your users will do.
 
 ## How it compares
 
-Statements below are limited to what each project documents; follow the links.
+Statements below are limited to what each project documents; follow the links. Re-read
+in round 3: the LlamaIndex `SimilarityPostprocessor` source (unchanged: a `None` score is
+dropped, a NaN score is kept) and the LangChain `similarity_score_threshold` entry. The
+LangGraph, Ragas, DeepEval, bm25s, FlashRank and arXiv rows were not re-fetched this round
+(unverified since the previous round).
 
 | | Sufficiency gate before generation | LLM calls needed for the check | Notes |
 |---|---|---|---|
@@ -321,10 +403,15 @@ it per query.
 - Not benchmarked here: dense/hybrid retrieval, cross-encoder rerankers, public
   datasets (BEIR/MS MARCO) - no network-free copy was available. `ScoreGate` works on their
   scores but the numbers above are BM25 only.
-- Not thread-safe; one pipeline per thread. Everything is in memory: the store
+- `ask`, `ingest`, `upsert`, `remove` and `retrieve` are safe to call from many threads (one
+  lock serialises the retrieval step and index updates, so retrieval is not parallel);
+  `calibrate`/`conformal`/`score_results` temporarily swap the gate and must not run
+  concurrently with `ask`. Everything is in memory: the store
   is loaded whole, and the vector search is brute force (no ANN index). At
   500K+ vectors, prefer the numpy path (installed with `[local]`) or an external
   vector DB.
+- `remove`/`upsert` change the corpus the false-answer bound was measured on: after large
+  changes, re-run `conformal`.
 - `calibrate` re-runs the pipeline once per threshold (11 runs by default) —
   cheap with BM25, slower with a hosted embedding API.
 

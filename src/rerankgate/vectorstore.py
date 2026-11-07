@@ -34,9 +34,8 @@ class VectorStore:
         """The stored (normalized) vectors, in chunk order."""
         return [list(v) for v in self._vectors]
 
-    def add(self, chunks: list[Chunk], vectors: list[list[float]]) -> None:
-        if len(chunks) != len(vectors):
-            raise ValueError("chunks and vectors must have equal length")
+    def validate(self, vectors: list[list[float]]) -> list[list[float]]:
+        """Return float rows, or raise ValueError (wrong size, NaN/inf) without storing anything."""
         clean: list[list[float]] = []
         for v in vectors:
             if len(v) != self.dim:
@@ -45,9 +44,25 @@ class VectorStore:
             if not all(math.isfinite(x) for x in row):
                 raise ValueError("embedding contains NaN or infinite values")
             clean.append(row)
+        return clean
+
+    def add(self, chunks: list[Chunk], vectors: list[list[float]]) -> None:
+        if len(chunks) != len(vectors):
+            raise ValueError("chunks and vectors must have equal length")
+        clean = self.validate(vectors)
         self._chunks.extend(chunks)
         self._vectors.extend(clean)
         self._matrix = None
+
+    def remove_docs(self, doc_ids: set[str]) -> int:
+        """Drop every chunk (and its vector) of the given documents; returns chunks removed."""
+        keep = [i for i, c in enumerate(self._chunks) if c.doc_id not in doc_ids]
+        removed = len(self._chunks) - len(keep)
+        if removed:
+            self._chunks = [self._chunks[i] for i in keep]
+            self._vectors = [self._vectors[i] for i in keep]
+            self._matrix = None
+        return removed
 
     def search(self, query_vec: list[float], k: int = 100) -> list[tuple[Chunk, float]]:
         """Top-k (chunk, cosine similarity) pairs, highest first."""

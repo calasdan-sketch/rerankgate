@@ -39,8 +39,12 @@ def _read_jsonl(path: str, what: str) -> Iterator[tuple[int, dict]]:
                     continue
                 try:
                     obj = json.loads(line)
+                except RecursionError as exc:
+                    raise InputError(f"{what} line {lineno}: JSON nested too deeply") from exc
                 except ValueError as exc:
-                    raise InputError(f"{what} line {lineno}: invalid JSON ({exc.msg})") from exc
+                    raise InputError(
+                        f"{what} line {lineno}: invalid JSON ({getattr(exc, 'msg', exc)})"
+                    ) from exc
                 if not isinstance(obj, dict):
                     raise InputError(f"{what} line {lineno}: expected a JSON object")
                 yield lineno, obj
@@ -50,6 +54,11 @@ def _read_jsonl(path: str, what: str) -> Iterator[tuple[int, dict]]:
 
 def _threshold_from_file(path: str) -> float:
     """Read a threshold written by `rerankgate conformal --out`; fail closed on anything odd."""
+    return _gate_file(path)[0]
+
+
+def _gate_file(path: str) -> tuple[float, dict]:
+    """(threshold, calibration block) from a gate file; fail closed on anything odd."""
     import math
 
     try:
@@ -57,12 +66,38 @@ def _threshold_from_file(path: str) -> float:
             obj = json.load(f)
     except OSError as exc:
         raise InputError(f"cannot open gate file {path!r}: {exc.strerror or exc}") from exc
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:
         raise InputError(f"gate file {path!r} is not valid JSON") from exc
     v = obj.get("threshold") if isinstance(obj, dict) else None
     if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
         raise InputError(f"gate file {path!r} has no finite positive 'threshold'")
-    return float(v)
+    cal = obj.get("calibration")
+    return float(v), cal if isinstance(cal, dict) else {}
+
+
+def _check_gate_file(pipe: RAGPipeline, path: str, cal: dict) -> None:
+    """A threshold is only valid for the scoring setup it was calibrated under."""
+    want = cal.get("fingerprint")
+    if want is None:
+        print(
+            f"rerankgate: warning: gate file {clean(path)!r} has no fingerprint (written by an "
+            "older version); cannot check it matches this setup. Re-run `conformal --out`.",
+            file=sys.stderr,
+        )
+        return
+    if want != pipe.fingerprint():
+        raise InputError(
+            f"gate file {path!r} was calibrated under a different scoring setup (stemming, "
+            "chunking, gate weights, reranker or retrieval modes differ), so its threshold "
+            "would not mean what it did. Re-run `rerankgate conformal` with the flags you use "
+            "for queries."
+        )
+    if cal.get("corpus_digest") not in (None, pipe.corpus_digest()):
+        print(
+            "rerankgate: warning: the corpus changed since this gate file was calibrated; the "
+            "false-answer bound was measured on the old corpus. Re-run `conformal`.",
+            file=sys.stderr,
+        )
 
 
 def _pipeline_for(args: argparse.Namespace, *, for_ingest: bool = False) -> RAGPipeline:
@@ -75,12 +110,18 @@ def _pipeline_for(args: argparse.Namespace, *, for_ingest: bool = False) -> RAGP
         cfg.retry.max_retries = args.max_retries
     if args.no_vectors:
         cfg.use_vectors = False
+    if getattr(args, "stem", False):
+        cfg.stemming = True
+    cal: dict = {}
     if getattr(args, "gate_file", None):
-        cfg.gate.threshold = _threshold_from_file(args.gate_file)
+        cfg.gate.threshold, cal = _gate_file(args.gate_file)
         cfg.gate_preset = None  # a calibrated threshold beats a preset
     if for_ingest:
         return RAGPipeline(config=cfg)
-    return RAGPipeline.load(args.store, config=cfg)
+    pipe = RAGPipeline.load(args.store, config=cfg)
+    if getattr(args, "gate_file", None):
+        _check_gate_file(pipe, args.gate_file, cal)
+    return pipe
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
@@ -111,6 +152,13 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 def cmd_query(args: argparse.Namespace) -> int:
     pipe = _pipeline_for(args)
+    if args.audit_log:
+        from rerankgate.audit import AuditLog
+
+        try:
+            pipe.audit = AuditLog(args.audit_log, store_queries=args.audit_queries)
+        except ValueError as exc:
+            raise InputError(str(exc)) from exc
     result = pipe.ask(args.query)
     out = result.to_dict()
     rc = EXIT_OK
@@ -219,6 +267,14 @@ def cmd_conformal(args: argparse.Namespace) -> int:
     if args.out:
         try:
             with open(args.out, "w", encoding="utf-8") as f:
+                import rerankgate
+
+                out = {
+                    **out,
+                    "fingerprint": pipe.fingerprint(),
+                    "corpus_digest": pipe.corpus_digest(),
+                    "version": rerankgate.__version__,
+                }
                 json.dump({"threshold": res.threshold, "calibration": out}, f, indent=2)
         except OSError as exc:
             raise InputError(f"cannot write {args.out!r}: {exc.strerror or exc}") from exc
@@ -226,6 +282,14 @@ def cmd_conformal(args: argparse.Namespace) -> int:
         print("FAILED: " + res.guarantee, file=sys.stderr)
         return EXIT_CHECK_FAILED
     return EXIT_OK
+
+
+def cmd_audit_verify(args: argparse.Namespace) -> int:
+    from rerankgate.audit import verify
+
+    rep = verify(args.log, expected_head=args.head)
+    print(json.dumps(rep.to_dict(), indent=2))
+    return EXIT_OK if rep.ok else EXIT_CHECK_FAILED
 
 
 def cmd_riskcov(args: argparse.Namespace) -> int:
@@ -285,6 +349,12 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--max-retries", type=int, default=None)
         sp.add_argument("--no-vectors", action="store_true", help="force BM25-only mode")
         sp.add_argument(
+            "--stem",
+            action="store_true",
+            help="light English stemming (restarting ~ restarts); use the same flag everywhere "
+            "for one store and gate file",
+        )
+        sp.add_argument(
             "--gate-file",
             default=None,
             metavar="FILE",
@@ -306,8 +376,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="exit 1 unless the verdict is 'answerable' (for scripts and CI)",
     )
+    pq.add_argument(
+        "--audit-log", default=None, metavar="FILE", help="append a hash-chained record"
+    )
+    pq.add_argument(
+        "--audit-queries", action="store_true", help="store query text too (default: SHA-256 only)"
+    )
     _common(pq)
     pq.set_defaults(func=cmd_query)
+
+    pv = sub.add_parser("audit-verify", help="check a decision log's hash chain")
+    pv.add_argument("log")
+    pv.add_argument("--head", default=None, help="expected final hash, anchored elsewhere")
+    pv.set_defaults(func=cmd_audit_verify)
 
     pe = sub.add_parser("eval", help="evaluate retrieval + gate on labeled qrels")
     pe.add_argument("--store", required=True)

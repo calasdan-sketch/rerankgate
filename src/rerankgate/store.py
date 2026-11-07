@@ -152,7 +152,7 @@ class DocumentStore:
         try:
             with open(self.meta_file, encoding="utf-8") as f:
                 meta = json.load(f)
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, RecursionError) as exc:
             raise StoreError(f"unreadable meta.json: {exc}") from exc
         if not isinstance(meta, dict):
             raise StoreError("meta.json must contain a JSON object")
@@ -257,7 +257,7 @@ def _check_finite(vectors: list[list[float]], name: str) -> None:
 def _parse_chunk(line: str, lineno: int) -> Chunk:
     try:
         obj = json.loads(line)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:
         raise StoreError(f"chunks.jsonl line {lineno}: invalid JSON ({exc})") from exc
     if not isinstance(obj, dict):
         raise StoreError(f"chunks.jsonl line {lineno}: expected an object")

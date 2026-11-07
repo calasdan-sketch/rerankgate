@@ -86,6 +86,13 @@ class PipelineConfig:
     bm25_weight: float = 1.0  # per-system RRF multipliers
     vector_weight: float = 1.0
     use_vectors: bool = True  # degraded to BM25-only if embeddings unavailable
+    # Opt-in light English stemming for BM25, the reranker and the gate (see tokenize.light_stem).
+    # Off by default so existing indexes, scores and calibrated thresholds do not change.
+    stemming: bool = False
+    # Drop retrieved chunks that look like instructions to a model (see injection.py, a
+    # heuristic tripwire) BEFORE reranking and the gate. Flagged ids are always listed in
+    # trace["suspect_evidence"]; this only decides whether they are also removed.
+    quarantine_suspect_evidence: bool = False
 
     # Chunking
     chunk_size: int = 500

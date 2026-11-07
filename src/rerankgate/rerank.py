@@ -23,15 +23,19 @@ class FeatureReranker:
 
     name = "feature"
 
+    def __init__(self, stem: bool = False) -> None:
+        self.stem = stem
+        self.last_ms = 0.0
+
     def rerank(self, query: str, candidates: list[ScoredChunk], k: int) -> list[ScoredChunk]:
         t0 = perf_counter()
-        q_terms = set(content_tokens(query))
+        q_terms = set(content_tokens(query, self.stem))
         q_phrases = _phrases(query)
         max_fused = max((c.score for c in candidates), default=1.0) or 1.0
 
         rescored: list[ScoredChunk] = []
         for c in candidates:
-            toks = set(tokenize(c.chunk.text))
+            toks = set(tokenize(c.chunk.text, self.stem))
             coverage = len(q_terms & toks) / len(q_terms) if q_terms else 0.0
             text_l = c.chunk.text.lower()
             phrase_bonus = 1.0 if q_phrases and any(p in text_l for p in q_phrases) else 0.0

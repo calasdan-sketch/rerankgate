@@ -119,15 +119,15 @@ class Baseline:
 
     @classmethod
     def from_json(cls, text: str) -> Baseline:
-        d = json.loads(text)
         try:
+            d = json.loads(text)
             b = cls(
                 n=int(d["n"]),
                 abstain_rate=float(d["abstain_rate"]),
                 edges=[float(x) for x in d["edges"]],
                 scores=[float(x) for x in d["scores"]],
             )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, RecursionError) as exc:
             raise ValueError(f"malformed baseline: {exc}") from exc
         if not (0 <= b.abstain_rate <= 1) or b.n < 1 or not b.scores:
             raise ValueError("malformed baseline: out-of-range values")

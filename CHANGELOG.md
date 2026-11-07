@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.0 - unreleased (expert round 3)
+
+### Added
+- `PipelineConfig(stemming=True)` / `--stem`: opt-in light English stemming in BM25, reranker,
+  gate and abstention notices (`tokenize.light_stem`). Off by default.
+- `RAGPipeline.remove()` / `upsert()`: incremental, all-or-nothing document updates (BM25
+  tombstones with compaction; results are bit-identical to a fresh build, checked by a churn
+  test). `ingest`/`upsert` embed and validate before touching any index.
+- Thread safety: one lock covers retrieval and index updates.
+- `AuditLog` / `verify_audit` / `rerankgate audit-verify` / `query --audit-log`: hash-chained
+  JSONL decision log (query stored as SHA-256 unless asked), anchorable head.
+- `RAGPipeline.fingerprint()` / `corpus_digest()`; `conformal --out` stores them and
+  `--gate-file` refuses a gate calibrated under a different scoring setup (exit 2).
+- `rerankgate.injection.flag_instructions`, `trace["suspect_evidence"]`,
+  `PipelineConfig(quarantine_suspect_evidence=...)`: heuristic tripwire for instruction-like
+  retrieved text (documented as bypassable).
+- `python -m rerankgate`.
+- Benchmark: stemming variant and a singular/plural stress test in `results.json`.
+
+### Fixed
+- HIGH: `chunk_overlap >= chunk_size` made `chunk_text` loop forever on a long sentence; sizes
+  and overlaps are now validated (`ValueError`).
+- `chunk_overlap=0` carried the whole previous chunk forward, so chunks grew without bound.
+- Chunk overlap started in the middle of a word (junk tokens at every chunk boundary).
+- Gate margin and "consensus" counted duplicate passages as separate evidence: copies zeroed
+  the margin (false abstention, misleading `NO_MARGIN`) and inflated corroboration. They now
+  count once. Scores for corpora with duplicate text change slightly.
+- Deeply nested JSON (corpus, store, gate file, baseline, ScoreGate file) raised
+  `RecursionError` / a traceback instead of a clean error.
+- A failing embedding backend during `ingest` could leave BM25 and the vector store out of step.
+
+### Changed
+- A gate file written before this version has no fingerprint: it still works, with a warning.
+- Calibrated thresholds from earlier 0.4 builds can shift by the duplicate/chunking fixes above;
+  re-run `conformal` (the committed benchmark moved the default-gate false-answer rate from
+  13.2% to 12.3%).
+
 ## 0.4.0 - unreleased (expert round 2)
 
 ### Added

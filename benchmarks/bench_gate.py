@@ -56,7 +56,51 @@ def best_f1_cutoff(vals, labels):
 
 def main() -> None:
     docs, qs = load()
-    cfg = PipelineConfig(use_vectors=False)
+    out = run(docs, qs, stem=False)
+    print("\n-- same benchmark with PipelineConfig(stemming=True) --")
+    out["variants"] = {"stemming": run(docs, qs, stem=True)}
+    out["inflected_queries"] = inflected(docs, qs)
+    print("\n-- queries with every long word flipped singular/plural (default threshold 0.55) --")
+    print(json.dumps(out["inflected_queries"], indent=2))
+    (ROOT / "results.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+
+
+def flip_number(query: str) -> str:
+    """Flip singular/plural on every word of 5+ letters: 'handles' <-> 'handle'. Deterministic."""
+    out = []
+    for w in query.split():
+        core = w.strip(".,?!;:()\"'")
+        if len(core) >= 5 and core.isascii() and core.isalpha():
+            new = core[:-1] if core.endswith("s") and not core.endswith("ss") else core + "s"
+            w = w.replace(core, new)
+        out.append(w)
+    return " ".join(out)
+
+
+def inflected(docs, qs) -> dict:
+    """Answerable / unanswerable queries after a morphological perturbation, default gate."""
+    res = {}
+    for name, stem in (("default", False), ("stemming", True)):
+        pipe = RAGPipeline(PipelineConfig(use_vectors=False, stemming=stem))
+        pipe.ingest([Document(id=d["id"], text=d["text"]) for d in docs])
+        a_ok = a_n = u_bad = u_n = 0
+        for q in qs:
+            passed = pipe.ask(flip_number(q["query"])).gate.passed
+            if q["answerable"]:
+                a_n += 1
+                a_ok += passed
+            else:
+                u_n += 1
+                u_bad += passed
+        res[name] = {
+            "answerable_answered": round(a_ok / a_n, 4),
+            "unanswerable_answered": round(u_bad / u_n, 4),
+        }
+    return res
+
+
+def run(docs, qs, stem: bool) -> dict:
+    cfg = PipelineConfig(use_vectors=False, stemming=stem)
     pipe = RAGPipeline(cfg)
     pipe.ingest([Document(id=d["id"], text=d["text"]) for d in docs])
     results = pipe.score_results([q["query"] for q in qs])
@@ -133,7 +177,7 @@ def main() -> None:
             f"{row['answerable_recall']:7.3f} {row['answer_precision']:9.3f} {row['coverage']:8.3f}"
         )
     print("AURC (lower is better):", out["aurc"])
-    (ROOT / "results.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    return out
 
 
 if __name__ == "__main__":

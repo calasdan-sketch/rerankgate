@@ -74,8 +74,51 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", text).casefold()
 
 
-def tokenize(text: str) -> list[str]:
-    """Case-folded word tokens in any script; CJK split per character."""
+_VOWELS = frozenset("aeiouy")
+
+
+def light_stem(tok: str) -> str:
+    """A deliberately conservative English suffix stripper (opt-in).
+
+    Only plain ASCII alphabetic tokens are touched; everything else (numbers, identifiers,
+    other scripts) is returned unchanged. It handles plural/verb inflections that decide
+    whether "restarting servers" matches "the server restarts": ``ies``, ``sses``, ``s``,
+    ``ing``, ``ed`` and a trailing ``e``. It is NOT Porter: "generation" stays as is. It is
+    deterministic and always applied once to both documents and queries; it is not idempotent
+    ("three" -> "thre" -> "thr"), so never re-stem an already stemmed term.
+    """
+    if len(tok) < 4 or not (tok.isascii() and tok.isalpha()):
+        return tok
+    t = tok
+    if t.endswith("sses"):
+        t = t[:-2]
+    elif t.endswith("ies") and len(t) > 4:
+        t = t[:-3] + "y"
+    elif t.endswith("s") and not t.endswith(("ss", "us", "is")):
+        t = t[:-1]
+    for suf in ("ing", "ed"):
+        if t.endswith(suf) and len(t) - len(suf) >= 3 and any(c in _VOWELS for c in t[: -len(suf)]):
+            t = t[: -len(suf)]
+            if len(t) > 3 and t[-1] == t[-2] and t[-1] not in "aeioulsz":
+                t = t[:-1]  # running -> run
+            break
+    if t.endswith("e") and len(t) > 3:
+        t = t[:-1]  # configure / configuring -> configur
+    if t.endswith("y") and len(t) > 3 and t[-2] not in _VOWELS:
+        t = t[:-1] + "i"  # entry / entries -> entri
+    return t
+
+
+def tokenize(text: str, stem: bool = False) -> list[str]:
+    """Case-folded word tokens in any script; CJK split per character.
+
+    ``stem=True`` additionally applies :func:`light_stem` (English inflections only).
+    """
+    toks = _tokenize(text)
+    return [light_stem(t) for t in toks] if stem else toks
+
+
+def _tokenize(text: str) -> list[str]:
     out: list[str] = []
     for tok in _token_re().findall(_normalize(text)):
         if _CJK.search(tok):
@@ -96,6 +139,7 @@ def tokenize(text: str) -> list[str]:
     return out
 
 
-def content_tokens(text: str) -> list[str]:
-    """Tokens with stopwords removed."""
-    return [t for t in tokenize(text) if t not in STOPWORDS]
+def content_tokens(text: str, stem: bool = False) -> list[str]:
+    """Tokens with stopwords removed (stopwords are checked before stemming)."""
+    toks = [t for t in _tokenize(text) if t not in STOPWORDS]
+    return [light_stem(t) for t in toks] if stem else toks

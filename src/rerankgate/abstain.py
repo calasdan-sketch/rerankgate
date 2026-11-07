@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from rerankgate.safeterm import clean
-from rerankgate.tokenize import content_tokens, tokenize
+from rerankgate.tokenize import content_tokens, light_stem, tokenize
 
 NO_MATCH = "no_match"  # nothing on this topic in the knowledge base
 PARTIAL = "partial"  # some of the question is covered, some is not
@@ -45,6 +45,10 @@ class AbstentionNotice:
         }
 
 
+def _norm(term: str, stem: bool) -> str:
+    return light_stem(term) if stem else term
+
+
 def _ordered_terms(query: str) -> list[str]:
     seen: list[str] = []
     for t in content_tokens(query):
@@ -61,11 +65,12 @@ def explain_abstention(result, max_sources: int = 3, max_terms: int = 5) -> Abst
         )
     reasons = list(result.gate.reasons)
     terms = _ordered_terms(result.query)
+    stem = bool(getattr(result, "trace", {}).get("stemming"))
     ev_tokens: set[str] = set()
     for c in result.evidence:
-        ev_tokens |= set(tokenize(c.chunk.text))
-    matched = [clean(t) for t in terms if t in ev_tokens][:max_terms]
-    missing = [clean(t) for t in terms if t not in ev_tokens][:max_terms]
+        ev_tokens |= set(tokenize(c.chunk.text, stem))
+    matched = [clean(t) for t in terms if _norm(t, stem) in ev_tokens][:max_terms]
+    missing = [clean(t) for t in terms if _norm(t, stem) not in ev_tokens][:max_terms]
     sources = []
     for c in result.evidence[:max_sources]:
         title = c.chunk.metadata.get("title") if isinstance(c.chunk.metadata, dict) else None
