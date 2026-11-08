@@ -78,7 +78,19 @@ Value, differentiation, effort, risk each 1-5.
 | 26 | Mutation testing in CI (mutmut) | 2 | 1 | 3 | 2 | NOT-DONE (needs a dev dependency and long runtime) |
 
 ## What was built
-Items 1-14; 187 + 3 new tests (`tests/test_round5.py`), 321 -> see "Pass B".
+Items 1-14; 190 new tests in `tests/test_round5.py` (321 -> 511).
+
+## Pass B: attacking the result
+Built wheel and sdist (`python -m build`; `twine check` PASSED for both), installed the wheel
+non-editable into a new venv, ran from a directory with spaces: `--version`, the 60-second demo
+(answerable / `NO_EVIDENCE` insufficient), the Python quick start with `upsert`/`remove`, and
+the **full 511-test suite against the installed wheel** (all passed). METADATA shows
+`Author: Calas Automations Inc.` and `Maintainer: Calas Automations Inc.`. Adversarial re-read of
+the diff plus a 6000-case chunking fuzz (no lost words, no non-termination). Found in this pass:
+the sdist lacked the new JSON test data (fixed in `MANIFEST.in`); some chunks can still exceed
+`chunk_size` by up to the overlap when an overlap tail is joined to the next sentence (178 of 6000
+random cases before round 5, 57 after; documented-size guarantee applies to hard-split pieces
+only; not changed).
 
 ## Benchmark
 Chunking fix moved the committed `benchmarks/results.json` (15 of 246 documents have a >500-char
