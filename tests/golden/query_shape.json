@@ -1,0 +1,60 @@
+{
+  "answer": null,
+  "attempts": [
+    [
+      "evidence_ids",
+      "gate",
+      "query",
+      "retrieval_metrics",
+      "rewrite"
+    ]
+  ],
+  "evidence": [
+    {
+      "chunk_id": "cat#c0",
+      "doc_id": "cat",
+      "score": 1.0,
+      "sources": {
+        "bm25": 2.900833,
+        "coverage": 1.0,
+        "phrase": 1.0,
+        "rerank": 1.0
+      },
+      "text": "Cats are small carnivorous mammals kept as pets. Cats purr when content."
+    }
+  ],
+  "faithfulness": null,
+  "gate": {
+    "explanation": "Retrieved evidence is sufficient to answer.",
+    "features": {
+      "coverage": 1.0,
+      "depth": 1,
+      "margin": 0.0,
+      "support": 0.0,
+      "top_score": 1.0
+    },
+    "passed": true,
+    "reasons": [
+      "PASS"
+    ],
+    "score": 0.65,
+    "threshold": 0.55
+  },
+  "notice": null,
+  "query": "why do cats purr",
+  "trace": [
+    "attempts",
+    "chunk_count",
+    "degraded",
+    "gate_overridden",
+    "gate_score",
+    "judge",
+    "modes",
+    "reranker",
+    "retries_used",
+    "stemming",
+    "suspect_evidence",
+    "suspect_quarantined"
+  ],
+  "verdict": "answerable"
+}

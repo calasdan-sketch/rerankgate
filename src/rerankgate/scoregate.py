@@ -107,8 +107,20 @@ class ScoreGate:
         if statistic != "auto" and statistic not in STATS:
             raise ValueError(f"unknown statistic {statistic!r}")
         idx = list(range(len(score_lists)))
-        sel = idx[0::2] if statistic == "auto" else []
-        calib = idx[1::2] if statistic == "auto" else idx
+        # Deterministic split, alternating WITHIN each class. A plain even/odd split sent every
+        # unanswerable query to one half whenever labels alternate with row order (a common
+        # layout), leaving nothing to calibrate on.
+        sel: list[int] = []
+        calib: list[int] = []
+        if statistic == "auto":
+            for label in (True, False):
+                members = [i for i in idx if bool(answerable[i]) is label]
+                sel += members[0::2]
+                calib += members[1::2]
+            sel.sort()
+            calib.sort()
+        else:
+            calib = idx
         stat = statistic
         if statistic == "auto":
             best = None
@@ -184,6 +196,8 @@ class ScoreGate:
             d = json.loads(text)
             if d["format"] != 1 or d["statistic"] not in STATS:
                 raise ValueError("unsupported format or statistic")
+            if d["delta"] is not None:
+                cal._check_prob("delta", d["delta"])
             tau = None if d["tau"] is None else float(d["tau"])
             neg = [float(x) for x in d["neg_stats"]]
             g = cls(
@@ -200,4 +214,16 @@ class ScoreGate:
         if (tau is not None and not math.isfinite(tau)) or not all(math.isfinite(x) for x in neg):
             raise ValueError("malformed ScoreGate file: non-finite numbers")
         cal._check_prob("alpha", g.alpha)
+        # Fail closed on a hand-edited file: the threshold must be the one the stored
+        # calibration scores, alpha and delta imply, or the stated guarantee is void.
+        expect = (
+            cal.conformal_threshold(neg, g.alpha)
+            if g.delta is None
+            else cal.pac_threshold(neg, g.alpha, g.delta)
+        )
+        expect_tau = expect if math.isfinite(expect) else None
+        if tau != expect_tau or g.n_calibration != len(neg):
+            raise ValueError(
+                "malformed ScoreGate file: threshold does not match its calibration scores"
+            )
         return g

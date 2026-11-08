@@ -6,6 +6,39 @@ PyPI has only 0.2.0; 0.3.0 was never uploaded, so the next release is 0.4.0 and 
 section below. Not a breaking API change, but scores change (see "Changed" in the sections
 below): re-calibrate any threshold you tuned on 0.2.
 
+### Round 5: property tests, differential tests, retrieval-quality metrics
+Fixed
+- Chunking: an over-long sentence (a log line, CSV row or code with no `.`/`!`/`?`) was cut at a
+  fixed character count, slicing words in half (`configuration` -> `co` + `uration`), so those
+  words could not be matched by any query. The cut now falls on whitespace and the overlap on a
+  word start; a single giant token with no whitespace is still cut by character.
+- Chunking: the text buffered before an over-long sentence was re-emitted once per piece of that
+  sentence (e.g. one short intro sentence stored four times), inflating the index and the
+  document frequencies. It is now emitted once. Chunks can no longer start or end with a tab or
+  newline. Existing stores are untouched; re-ingest to pick this up. 15 of the 246 benchmark
+  documents hit this path, so benchmark numbers moved slightly (README table updated).
+- `ScoreGate.fit(statistic="auto")` split rows by even/odd index, so data whose labels alternate
+  with row order sent every unanswerable query to the selection half and failed with "needs
+  unanswerable queries". It now alternates within each label class (still deterministic, still
+  disjoint halves).
+- `ScoreGate.from_json` now fails closed on a hand-edited file: the stored threshold must be the
+  one its calibration scores, alpha and delta imply, `n_calibration` must match, and `delta` must
+  be in (0, 1). Files written by `to_json` are unaffected.
+- `wilson_interval` could return a lower bound 1e-17 above the observed rate (k = 0); clamped.
+
+Added
+- `eval` reports precision@k, nDCG@k, MAP, `false_answer_rate` and 95% Wilson intervals for
+  `false_answer_rate` and `gate_recall` (new keys only; nothing removed or renamed). A document
+  counts once however many of its chunks are retrieved, so nDCG and MAP never exceed 1.
+- `rerankgate.__author__`; `maintainers` in `pyproject.toml` (name only, no email). The author
+  is exactly "Calas Automations Inc." in metadata, `LICENSE` and `__author__`, pinned by a test.
+- `tests/test_round5.py` (190 tests): seeded property tests (no extra dependency) for the conformal and PAC thresholds
+  (including coverage by simulation and brute-force comparison), a differential test of BM25
+  against a naive reference (before and after removals), chunking invariants on random text,
+  metric bounds, golden files for `eval --summary`, `query --json` and the gate file, and a
+  store written by the real 0.2.0 release as a fixture.
+- `docs/ROUND5.md` (findings, 24-idea scored table, what was not tested).
+
 ### Round 4: what a stranger who `pip install`s gets
 Added
 - `LICENSE` file (MIT, Calas Automations Inc.), shipped in the wheel and sdist. It was missing:

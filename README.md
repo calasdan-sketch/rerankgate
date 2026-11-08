@@ -103,9 +103,11 @@ rerankgate eval --store ./store --qrels eval.jsonl
 rerankgate eval --store ./store --qrels eval.jsonl --summary  # aggregates only
 ```
 
-`rerankgate eval` reports recall@k, MRR (over answerable items), the gate
-confusion matrix (precision/recall of PASS vs your labels), and the abstention
-rate.
+`rerankgate eval` reports recall@k, precision@k, nDCG@k and MAP and MRR (over answerable items;
+a document counts once however many of its chunks are retrieved), the gate confusion matrix
+(precision/recall of PASS vs your labels), the abstention rate, and the **false-answer rate with a
+95% Wilson interval** (with 20 unanswerable queries, 0 false answers still only proves
+"below about 16%": the interval says so).
 
 ### Calibrate the threshold on your data
 
@@ -317,24 +319,27 @@ Mean over 200 random 50/50 calibration/test splits; target alpha = 5%, delta = 1
 
 | Method | False-answer rate | Splits above 5% | Answerable recall | Answer precision |
 |---|---|---|---|---|
-| raw top-1 BM25 cutoff, tuned for F1 (what a "similarity cutoff" gives you) | 8.6% | 78% | 90.5% | 91.2% |
-| rerankgate default gate (0.55), no calibration | 12.3% | 100% | 99.2% | 88.1% |
-| rerankgate + `conformal` (alpha 0.05) | **4.4%** | 40% | 98.0% | 95.1% |
-| rerankgate + `conformal` (alpha 0.05, delta 0.10) | **2.5%** | **12%** | 93.4% | 96.9% |
-| `ScoreGate` on raw BM25 scores | 3.5% | 24% | 78.5% | 96.0% |
+| raw top-1 BM25 cutoff, tuned for F1 (what a "similarity cutoff" gives you) | 9.2% | 79% | 90.3% | 90.8% |
+| rerankgate default gate (0.55), no calibration | 12.3% | 100% | 98.7% | 88.1% |
+| rerankgate + `conformal` (alpha 0.05) | **4.4%** | 40% | 97.8% | 95.1% |
+| rerankgate + `conformal` (alpha 0.05, delta 0.10) | **2.5%** | **11%** | 93.3% | 96.9% |
+| `ScoreGate` on raw BM25 scores | 3.4% | 28% | 78.0% | 96.1% |
 
 Reading it: the default threshold lets through 12% of unanswerable queries; the conformal
 threshold brings the average under 5% (as promised) at a 1-point recall cost, and the
-high-probability variant exceeds 5% in about delta of splits (12% observed, 10% promised;
+high-probability variant exceeds 5% in about delta of splits (11% observed, 10% promised;
 200 overlapping splits of one finite dataset, so +-3 points of noise). Honest caveat: the
 gate score ranks answerable above unanswerable barely better than raw BM25 (risk-coverage
-AUC 0.171 vs 0.173; oracle 0.160, answering everything 0.509) - the step change is the
+AUC 0.172 vs 0.174; oracle 0.160, answering everything 0.509) - the step change is the
 *calibrated, bounded* decision, not a better ranking signal. Also found and fixed here:
 before 0.4 the query-rewrite retries inflated false answers from 27 to 119 of 223
 unanswerable queries, because the gate judged coverage against the expanded query.
 (0.4 round 3 also removed a duplicate-passage artefact and a half-word chunk-overlap bug,
 which moved the default-gate false-answer rate from 13.2% to 12.3%; the other rows moved by
-<= 0.2 points.)
+<= 0.2 points. Round 5 fixed chunking of long unpunctuated sentences, which re-emitted the preceding
+text once per piece and cut words in half; 15 of the 246 benchmark documents hit that path, so
+default-gate recall moved 99.2% -> 98.7% and the other rows by <= 0.6 points, except the
+raw-cutoff row, which moved 0.6 points of false-answer rate: noise-level for one finite dataset.)
 
 **Stemming, same benchmark** (`PipelineConfig(stemming=True)`): default gate 12.8% false
 answers / 99.2% recall; `conformal` 4.2% / 96.4%; `conformal` with `delta` 2.6% / 88.6% (was

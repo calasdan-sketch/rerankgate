@@ -149,7 +149,7 @@ def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     d = 1 + z * z / n
     c = (p + z * z / (2 * n)) / d
     h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
-    return (max(0.0, c - h), min(1.0, c + h))
+    return (max(0.0, min(p, c - h)), min(1.0, max(p, c + h)))  # clamp: float error at p=0 or 1
 
 
 def nudge_up(tau: float) -> float:
